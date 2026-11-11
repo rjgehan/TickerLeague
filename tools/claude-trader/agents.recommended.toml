@@ -1,0 +1,213 @@
+# Final agents.toml for the CasaOS server: nine Claude bots, nine experiments, each a rule-based strategy that came out
+# on top in ten years of backtests (tools/strategy-lab). The four ChatGPT bots are converted to automatic Claude bots
+# (three with new strategies, ChatGPT Pennys retired). NO KEYS IN HERE: put each bot's own key where it says
+# stk_REPLACE_ME, then copy the file to /DATA/AppData/stocks/trader-data/agents.toml
+#   sudo chown -R 1000:1000 /DATA/AppData/stocks/trader-data
+#   sudo chmod 600 /DATA/AppData/stocks/trader-data/agents.toml
+# Never commit the file with keys in it.
+#
+# Converting a ChatGPT bot: Admin -> Players -> the bot -> API keys -> issue a key (trade scope), and paste it here. In
+# its console (/bots/<handle>) set the name and the model label to Claude. Its league history stays.
+# Retiring ChatGPT Pennys: leave it out of this file (nothing runs it); to stop it for good, freeze it in Admin.
+#
+# Backtest: daily data Nov 2016 - Oct 2026, trades at the close with slippage, $500,000 start; 2022-26 never shaped
+# the rules (out of sample). SPY buy & hold 2022-26: 12.0%/yr, worst drop -25%.
+#   claudeaggresive  3x rotation + crypto            41.8%/yr, worst drop -46%
+#   chatgptstupid    Safe Haven: GLD/TLT/UUP/DBC     24.7%/yr, worst drop -22%  (the one that zigs when tech zags)
+#   claudetech      chips: SMH, SOXL on dips        34.9%/yr, worst drop -40%
+#   trend_crypto     TQQQ trend + stacked crypto     30.7%/yr, worst drop -28%
+#   chatgptspace     Trend Rider: QQQ trend -> TQQQ  26.8%/yr, worst drop -43%
+#   crypto_trend     stacked crypto trend            26.2%/yr, worst drop -30%
+#   claude           2x Nasdaq trend + crypto        25.0%/yr, worst drop -24%
+#   dip_sniper       Dip Booster                     21.8%/yr, worst drop -25%
+#   chatgpt          Sector Rotation (the control)   14.1%/yr, worst drop -19%
+# Past results do not predict future ones; this is a paper-trading league, not investment advice.
+#
+# What the first two weeks taught: hold ETFs, not single stocks through earnings (one report cost Claude Tech $4.4k);
+# give the bots exact numbers (get_indicators) instead of letting them estimate averages; judge in months, not days.
+#
+# Reassessment 2026-11-05, after a month of Nasdaq -13% and chips -26% (tools/strategy-lab/reassess.py): every bot
+# followed its rules; the damage came from six of nine bots making the same leveraged-tech bet. Changes: Chip Rocket
+# becomes Safe Haven; Claude Tech and Trend Rider top up when they hold idle cash in an uptrend; Dip Sniper boosts only
+# with a 2% cushion over the 200-day average. Tested and rejected: the cushion for Claude Tech (no consistent gain).
+#
+# Every rule acts on the day's close: each bot checks in once, at 15:50 ET, every day (stocks only on trading days,
+# crypto every day). A bot reads its trend switches from what it holds, so it needs no memory.
+# Shared definitions: get_indicators <symbol> gives price (today's), sma5, sma50, sma200, vsSma200 (price / sma200 - 1),
+# rsi2 and return126 (6 months). A trend switch with a 2% band turns ON once vsSma200 > 0.02 and OFF once
+# vsSma200 < -0.02.
+
+[[agent]]
+handle = "claude"
+key = "stk_REPLACE_ME"
+schedule_et = "15:50"
+extra_runs_per_day = 0
+strategy = """
+Balanced: 2x Nasdaq while it trends up, plus a small crypto sleeve (backtest 2022-26: 25.0%/yr, worst drop -24%).
+Use get_indicators for every number; never estimate averages yourself.
+Sleeve A, 70% of the account value (trading days only): get_indicators QQQ.
+- Holding no QLD and vsSma200 > 0.02: buy QLD (2x Nasdaq-100) for 70% of the account value (MARKET, notional).
+- Holding QLD and vsSma200 < -0.02: sell all QLD. Otherwise keep what you hold.
+Sleeve B, BTC/USD and ETH/USD, at most 15% each (every day): get_indicators for each pair. Target for each coin: 15% of
+the account value if price > sma50 and price > sma200; 7.5% if price > sma50 only; 0% otherwise. Trade a coin only
+when its target changes (buy or sell the difference, MARKET, notional); never rebalance an unchanged target.
+No other trades, no single stocks. Never sell QLD bought today. Quote the indicator values in each rationale.
+"""
+
+[[agent]]
+handle = "claudeaggresive"
+key = "stk_REPLACE_ME"
+schedule_et = "15:50"
+extra_runs_per_day = 0
+strategy = """
+Aggressive: half in the strongest 3x fund, half in crypto. The most money in the backtest and big swings (2022-26:
+41.8%/yr, worst drop -46%). Use get_indicators for every number; never estimate.
+Sleeve A, 50% of the account value (trading days only). Signals QQQ, SPY, SMH, XLK, GLD (get_indicators each). A
+signal's switch is ON once vsSma200 > 0.02 and OFF once vsSma200 < -0.02; a signal whose fund you hold stays ON until
+vsSma200 < -0.02. 3x funds: QQQ->TQQQ, SPY->UPRO, SMH->SOXL, XLK->TECL.
+- On the last trading day of the month: among QQQ, SPY, SMH and XLK with the switch ON, pick the highest return126;
+  hold its 3x fund with the whole sleeve. None ON: hold GLD if GLD's switch is ON, else cash. Sell the old holding
+  first, then buy.
+- Any other trading day: if the signal of what you hold turns OFF, sell it and move the sleeve to GLD if GLD is ON,
+  else cash. Otherwise do nothing.
+Sleeve B, BTC/USD and ETH/USD, at most 25% each (every day): target 25% of the account value if price > sma50 and
+price > sma200; 12.5% if price > sma50 only; else 0%. Trade a coin only when its target changes.
+Never sell stock bought today. Quote the indicator values in each rationale.
+"""
+
+[[agent]]
+handle = "claudetech"
+key = "stk_REPLACE_ME"
+schedule_et = "15:50"
+extra_runs_per_day = 0
+strategy = """
+Tech: semiconductors, boosted to 3x on dips. Hold SMH while it trends up; during a sharp dip switch to SOXL (3x chips)
+and back after the bounce (backtest 2022-26: 34.9%/yr, worst drop -40%). ETFs only: no single stocks (one earnings
+report cost this bot $4.4k). Trading days only. Use get_indicators SMH for every number.
+- Holding SMH or SOXL means the trend is ON; holding neither means OFF. Sell any other position you still hold.
+- OFF: if vsSma200 > 0.02, buy SMH with all cash but $1,000. Otherwise stay in cash.
+- ON, vsSma200 >= -0.02 and SMH + SOXL are under 90% of the account value: buy SMH (never SOXL) with all cash but $1,000, then apply
+  the rules below on the next check-in. (A leftover 10% SMH stake once kept this bot 90% in cash.)
+- ON and vsSma200 < -0.02: sell SMH and SOXL; stay in cash.
+- ON, holding SMH, rsi2 < 10: sell all SMH and buy SOXL with the proceeds.
+- ON, holding SOXL, price > sma5: sell all SOXL and buy SMH with the proceeds.
+- Otherwise do nothing.
+Never sell anything bought today (cash-account rules; the next check-in is fine). Quote price, vsSma200, sma5 and rsi2
+in each rationale.
+"""
+
+[[agent]]
+handle = "trend_crypto"
+key = "stk_REPLACE_ME"
+schedule_et = "15:50"
+extra_runs_per_day = 0
+strategy = """
+Trend + Crypto: half TQQQ while the Nasdaq trends up, half crypto sized by trend strength (backtest 2022-26:
+30.7%/yr, worst drop -28%; the halves barely move together). Use get_indicators for every number.
+Sleeve A, 50% of the account value (trading days only): get_indicators QQQ. Holding no TQQQ and vsSma200 > 0.02: buy
+TQQQ for 50% of the account value. Holding TQQQ and vsSma200 < -0.02: sell all TQQQ. Otherwise keep what you hold.
+Never sell TQQQ bought today.
+Sleeve B, BTC/USD and ETH/USD, at most 25% each (every day): get_indicators for each pair. Target: 25% of the account
+value if price > sma50 and price > sma200; 12.5% if price > sma50 only; 0% otherwise. Trade a coin only when its
+target changes (buy or sell the difference, MARKET, notional).
+No other trades. Quote the indicator values in each rationale.
+"""
+
+[[agent]]
+handle = "dip_sniper"
+key = "stk_REPLACE_ME"
+schedule_et = "15:50"
+extra_runs_per_day = 0
+strategy = """
+Dip Booster: keep the money working in an uptrend and switch to 3x funds only during sharp dips (backtest 2022-26:
+21.8%/yr, worst drop -25%). Two halves, 50% of the account each: the SPY half (plain SPY, boost UPRO) and the QQQ half
+(plain QQQ, boost TQQQ). Trading days only; never react to intraday moves (buying intraday drops lost money).
+For each half, get_indicators on its index (SPY or QQQ):
+1. Holding the half's plain or boost fund means its trend is ON; holding neither means OFF.
+2. OFF: if vsSma200 > 0.02, buy the plain fund with the half. Otherwise stay in cash.
+3. ON and vsSma200 < -0.02: sell the half's funds; it is in cash.
+4. ON, holding the plain fund, rsi2 < 10 and vsSma200 > 0.02: sell it and buy the boost fund with the proceeds. (No
+   boost when the index is within 2% of its 200-day average: a dip that close to the exit line is often the start of
+   a breakdown. Backtest: same return, worst drop -21% instead of -25%.)
+5. ON, holding the boost fund, price > sma5: sell it and buy the plain fund with the proceeds.
+6. Otherwise do nothing.
+A half is 50% of the account value when you trade it (MARKET, notional). Never sell anything bought today. No other
+trades. Quote price, vsSma200, sma5 and rsi2 in each rationale.
+"""
+
+[[agent]]
+handle = "crypto_trend"
+key = "stk_REPLACE_ME"
+schedule_et = "15:50"
+extra_runs_per_day = 0
+strategy = """
+Crypto Trend, stacked: hold more of a coin the stronger its trend (backtest 2022-26: 26.2%/yr, worst drop -30%; buy &
+hold of the same coins: 2.8%/yr, -68%). Every day, weekends included.
+For BTC/USD and ETH/USD: get_indicators <pair>. Target: 50% of the account value if price > sma50 and price > sma200;
+25% if price > sma50 only; 0% otherwise.
+Trade a coin only when its target changes: buy or sell the difference between the target and what you hold (MARKET,
+notional). Never rebalance a coin whose target did not change, even if it drifted.
+No other coins, no stocks, no stops, no news-based trades. Quote price, sma50 and sma200 in each rationale.
+"""
+
+# ------------------------------------------------------------------------------------------- converted ChatGPT bots
+
+# ChatGPT Space -> Claude Trend Rider: the core idea of several bots, alone, as a yardstick.
+[[agent]]
+handle = "chatgptspace"
+key = "stk_REPLACE_ME"
+schedule_et = "15:50"
+extra_runs_per_day = 0
+strategy = """
+Trend Rider: own TQQQ (3x Nasdaq-100) only while QQQ trends up; otherwise cash (backtest 2022-26: 26.8%/yr, worst
+drop -43%). Trading days only. First check-in: sell every position that is not TQQQ (the old ChatGPT holdings).
+get_indicators QQQ:
+- Holding no TQQQ and vsSma200 > 0.02: buy TQQQ with all cash but $1,000 (MARKET, notional).
+- Holding TQQQ and vsSma200 < -0.02: sell all TQQQ.
+- Holding TQQQ, vsSma200 >= -0.02 and more than $10,000 in cash: buy TQQQ with all cash but $1,000.
+- Otherwise do nothing. Between the two lines keep whatever you hold: the band stops whipsaws.
+Never sell TQQQ bought today; never trade on news or intraday moves. Quote price and vsSma200 in each rationale.
+"""
+
+# ChatGPT Stupid -> Claude Safe Haven (was Chip Rocket, 2026-10-29 to 11-05: -32% in the chip selloff, a copy of Claude
+# Tech's bet with a -77% worst drop). Now the one bot that does not move with tech: correlation 0.05 with the TQQQ
+# trend, +1.9% on average in the 17 months QQQ fell more than 5%. Much of its 2022-26 return is gold's run.
+[[agent]]
+handle = "chatgptstupid"
+key = "stk_REPLACE_ME"
+schedule_et = "15:50"
+extra_runs_per_day = 0
+strategy = """
+Safe Haven: once a month, own the single strongest of gold, long Treasuries, the dollar and commodities, or short
+Treasuries when none beats them (backtest 2022-26: 24.7%/yr, worst drop -22%; 2016-21: 13.0%/yr). It is meant to
+make money when tech falls. Universe: GLD TLT UUP DBC. Safe asset: SHY. Trading days only.
+First check-in: sell every position outside the universe and SHY (the old SOXL rule held nothing but cash), then buy
+the target below right away; after that trade only on the last trading day of the month (get_market_clock or
+get_calendar: tomorrow is in a new month or this is the month's last session). Any other day, do nothing.
+On those days: get_indicators for GLD, TLT, UUP, DBC and SHY. The pick is the one of the four with the highest
+return126. If its return126 > SHY's return126, the target is the pick; otherwise SHY. Hold the target with all cash
+but $1,000; if you already hold it, do nothing. Otherwise sell the old holding first, then buy (MARKET, notional).
+Never sell anything bought today. In each rationale, list the four return126 values and SHY's.
+"""
+
+# ChatGPT semi money focused -> Claude Sector Rotation: the steady control the others are measured against.
+[[agent]]
+handle = "chatgpt"
+key = "stk_REPLACE_ME"
+schedule_et = "15:50"
+extra_runs_per_day = 0
+strategy = """
+Sector Rotation (dual momentum): once a month, own the 3 strongest of 14 ETFs, each only if it beats short Treasuries
+(backtest 2022-26: 14.1%/yr, worst drop -19%: the steady control). Universe: XLK XLF XLE XLV XLY XLP XLI XLU XLB XLRE
+SMH QQQ GLD TLT. Safe asset: SHY. Trading days only.
+First check-in: sell every position outside the universe and SHY (the old ChatGPT holdings); then wait for month-end.
+Trade ONLY on the last trading day of the month (get_market_clock or get_calendar: tomorrow is in a new month or this
+is the month's last session). Any other day, do nothing.
+On that day: get_indicators for the 14 ETFs and SHY. Rank the 14 by return126 and take the top 3. Each pick with
+return126 > SHY's return126 gets one third of the account value; each other pick puts its third in SHY. Sell what is
+no longer a target first, then buy the targets (MARKET, notional). Leave a target alone if it is within 5 points of
+one third.
+In each rationale, list the 3 picks with their return126 and SHY's.
+"""
+
+# ChatGPT Pennys: retired. Penny stocks had no backtested edge and the bot held 60% in one of them.

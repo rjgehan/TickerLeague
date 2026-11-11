@@ -1,232 +1,195 @@
-# stocks
+<p align="center">
+  <img src="frontend/public/icon-512.png" width="96" alt="Ticker League icon">
+</p>
 
-[![Release](https://github.com/rjgehan/stocks/actions/workflows/release.yml/badge.svg)](https://github.com/rjgehan/stocks/actions/workflows/release.yml)
+<h1 align="center">Ticker League</h1>
 
-**A public, scientific paper-trading league where friends and AI models compete with fake money on the real stock
-market: every portfolio, order, activity and rationale is visible to everyone, live.**
+<p align="center">
+  <b>Fantasy football for the stock market: people and AI trading bots compete with $500,000 of paper money each.</b><br>
+  Live US stocks, crypto and options at real prices, under real brokerage rules. One Spring Boot backend, self-hosted
+  on a home server.
+</p>
 
-Everyone, human or bot, starts with **$500,000 of fake money** and trades real US stocks and ETFs at live market prices
-in a Webull-style app that works on phone and desktop. Claude and ChatGPT join as players too: they read the same
-market data, place orders through the same API, and follow exactly the same rules. Nothing is hidden: anyone can open
-a player and see their live positions, every order with its fills and reasoning, their account activity and their
-P&L, so the league doubles as an open experiment in how humans and AI models trade. A leaderboard shows who is
-actually good at this.
+<p align="center">
+  <a href="docs/media/ticker-league-demo.mp4">
+    <img src="docs/media/ticker-league-demo.gif" width="720" alt="Ticker League in 21 seconds: a leaderboard of humans versus AI, Claude bots explaining every order, and the live trading screen">
+  </a><br>
+  <sub>21-second tour. Click it for the full video with sound.</sub>
+</p>
 
-> **Status: Phase 1 (the playable league) is running on the owner's server, and Phase 2 wave A is built.**
-> Trading with all five order types plus bracket/OCO/OTO/OTOCO groups, live market data, the deposit-aware
-> leaderboard with league stats and a race chart, price alerts with Web Push, chart indicators and a screener, the
-> MCP server (also as a claude.ai / ChatGPT connector over OAuth) and the agent runner for the Claude and ChatGPT
-> bots all work. What is left is the owner's checklist (bot keys, Cloudflare settings, connecting the connectors, a
-> restore rehearsal) and the later Phase 2 waves (margin, seasons, halts). See [what works today](#status) and the
-> [roadmap](docs/ROADMAP.md).
->
-> Paper money only. There is no brokerage connection, no real money, and nothing here is financial advice.
+<p align="center">
+  <a href="https://github.com/rjgehan/stocks/actions/workflows/release.yml"><img alt="Release" src="https://github.com/rjgehan/stocks/actions/workflows/release.yml/badge.svg"></a>
+  <img alt="Java 21" src="https://img.shields.io/badge/Java-21-b07219">
+  <img alt="Spring Boot 4" src="https://img.shields.io/badge/Spring%20Boot-4.1-6db33f">
+  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-18-336791">
+  <img alt="React + TypeScript" src="https://img.shields.io/badge/React%2019-TypeScript-3178c6">
+  <img alt="MCP" src="https://img.shields.io/badge/MCP-63%20tools-a78bfa">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-JUnit%20%2B%20Vitest%20%2B%20Playwright-2ead33">
+</p>
 
 ---
 
-## Why this exists
+## At a glance
 
-Most paper-trading apps are single-player and forgiving: instant fills at the last price, no fees, no settlement.
-This one aims to feel like a real retail brokerage account, and to make it a competition:
+| | |
+| --- | --- |
+| **What** | A private trading league. Every player, human or AI, gets $500,000 of fake money and trades the live market; a public leaderboard ranks everyone by all-time profit, with the S&P 500 as a player to beat |
+| **Status** | Live since October 2026 and deployed on every push to `main`. The league at [stocks.gehan.cloud](https://stocks.gehan.cloud) is invite-only, so you can't sign up there; the video above shows it. Right now it is me against nine Claude bots, each running a different backtested strategy |
+| **Why** | I wanted a safe place to find out whether AI models and automated strategies can actually beat the market, with real prices and real rules but no real money. The long-term goal is to run the winners with real money |
+| **Size** | ~190k lines (Java 121k, TypeScript 62k, Python 3.5k), 155 REST operations, 63 MCP tools, 59 tables, 2,100+ backend tests, 375 frontend unit tests, 19 Playwright spec files |
 
-- **Real prices, realistic fills.** Buys fill at the ask and sells at the bid from live quotes, with a short
-  simulated delay so no one can trade on a stale price. Big orders can fill partially.
-- **Real rules.** Market hours, pre-market and after-hours sessions, the market holiday calendar, T+1 settlement,
-  settled vs. unsettled cash, good-faith violations, and SEC/FINRA fees on sells, the same rules a cash account hits
-  at a real broker.
-- **Humans vs. AI, in the open.** Claude and ChatGPT are ordinary players with API keys. Every order carries its
-  reasoning, public at once, and every portfolio and order history is public and live, so you can see *what* each
-  player holds and *why* it bought.
-- **A fair leaderboard.** Ranked by time-weighted return, so money the admin hands out never counts as a gain.
+## What it does
 
-## Features
+- **Trade like a real brokerage account.** Market, limit, stop, stop-limit and trailing-stop orders, bracket and
+  OCO/OTO/OTOCO groups, fractional shares and dollar amounts, extended hours. Crypto trades 24/7; options are
+  long-only calls and puts.
+- **Real rules, not a toy.** Buys fill at the ask and sells at the bid from live quotes. Cash settles T+1, sells pay
+  SEC and FINRA fees, and selling stock bought with unsettled cash earns a good-faith violation. Splits and dividends
+  are applied as they happen.
+- **One leaderboard for people and bots.** Ranked by all-time dollar profit, with day and total P&L, a humans-vs-AI
+  "Arena", a race chart, and Sharpe, drawdown and win rate per player.
+- **Everything is public.** Anyone can open any player and see their live positions, every order with its fills, and
+  the reasoning each bot wrote when it placed it.
+- **AI players trade through the same API as everyone.** An MCP server gives Claude (or any MCP client) 63 tools for
+  quotes, charts, the screener, orders and the league. claude.ai and ChatGPT can connect over OAuth and act as a bot.
+- **Bots run on their own.** A scheduler runs each Claude bot's daily check-in (weekends too, for crypto); manual bots get a prompt
+  you can paste into any chat AI, with one-click execution of its reply.
+- **Also:** charts with indicators (MA, EMA, Bollinger, VWAP, MACD, RSI), watchlists, a screener, price alerts with
+  Web Push, a P&L calendar, and an installable PWA that works on phone and desktop.
 
-**Trading**
-- Market, limit, stop, stop-limit and trailing-stop orders; day and good-til-canceled (60 days)
-- Bracket (take profit + stop loss), OCO, OTO and OTOCO group orders: the exits wait for the entry, one leg filling
-  cancels the other
-- Fractional shares and dollar-amount orders ("buy $25 of NVDA")
-- Extended-hours trading for limit orders
-- Positions, cost basis, realized and unrealized P&L, full activity history, and a P&L Analysis tab (earnings vs SPY
-  and QQQ, a daily and monthly P&L calendar, P&L by symbol)
-- Real-broker details: open orders adjusted on ex-dividend dates (FINRA 5330), optional cancel latency
-
-**League**
-- Leaderboard by time-weighted return and by dollar P&L, compared with the S&P 500 (SPY), plus max drawdown, Sharpe
-  ratio, profit factor and win rate
-- A race chart of everyone's returns, rank history, and a live feed of trades with emoji reactions
-- Public player profiles: the live portfolio (cash, positions, open orders), the full order history with fills and
-  notes, account activity, P&L analysis and league stats of every player
-- An **admin** account that can deposit or withdraw fake money for one player or everyone, with a memo; every
-  movement is a ledger entry, never an edited balance
-- New players start with $500,000 (configurable)
-
-**AI players**
-- An **MCP server** (`/mcp`) with 60 tools for quotes, charts, the screener, account, orders, alerts and the league,
-  so Claude, ChatGPT or any MCP client can trade
-- **claude.ai and ChatGPT connectors** over OAuth 2.1: sign in once and choose which bot the connector acts as
-- The same features over a **REST API** with an OpenAPI 3.1 spec, plus a Server-Sent Events stream for scripts
-- A built-in **agent runner** that drives the Claude and ChatGPT bots on a schedule, with daily cost caps; its runs
-  show up under Admin → Bots, and the bots keep a public trade journal
-- Manual bots: copy a prompt to any chat AI (Gemini, Codex…) and paste its reply back to trade.
-- **Run now**: the owner of a bot (or the admin) can start one of its check-ins from the app instead of waiting for
-  its schedule, with a dry-run option; the claude-trader service on the server picks it up within about a minute
-  (for the bots in its agents file; the button says when no trader serves a bot). **Run all** does it for every bot
-  at once, after a confirmation that names them, and sums up per bot
-- Bots can never use admin features: blocked in the database, the security layer and the tool list
-
-**App**
-- Webull-inspired dark UI: a 3-pane layout on desktop, bottom tabs and sheets on phone, installable as a PWA that
-  works offline and sends push notifications for fills and price alerts
-- Live quotes; candlestick, hollow, Heikin Ashi and line charts with MA, EMA, BOLL, VWAP, MACD, RSI and KDJ; Time &
-  Sales; news and analyst ratings
-- Watchlists with sortable columns, a stock screener, price alerts, and a trade ticket with an order preview
-
-<a id="status"></a>
-## Status
-
-| Area | State |
-|---|---|
-| Trading: market, limit, stop, stop-limit and trailing-stop orders (shares and dollar amounts, day and GTC, extended hours for limits), realistic fills, SEC/FINRA fees, T+1 settlement, good-faith violations | Works |
-| Group orders: bracket, OCO, OTO and OTOCO; FINRA 5330 dividend adjustments; cancel latency behind a flag (Phase 2) | Works |
-| Accounts: cash ledger, positions and lots, activity history, resets; admin deposits and withdrawals to one player or everyone; P&L Analysis (earnings vs SPY/QQQ, P&L calendar, P&L by symbol) | Works |
-| Corporate actions: splits and reverse splits (with cash in lieu), cash dividends, ticker changes; anything else waits for the admin | Works |
-| League: leaderboard by time-weighted return and by P&L vs SPY (deposits never count as gains), Arena (humans vs AI), public player profiles (live portfolio, order history, activity, P&L analysis), live feed; Sharpe, profit factor, win rate, race chart, rank history and feed reactions (Phase 2) | Works |
-| Market data: live Alpaca (IEX) and Finnhub in production; a deterministic simulator for development and tests; screener, Time & Sales, analyst ratings (Phase 2) | Works |
-| Web app: Webull-style UI on phone, tablet and desktop, live quotes and charts with indicators, watchlists with columns, notifications, admin console; offline-capable PWA, price alerts and Web Push (Phase 2) | Works (push on a real phone still to be checked by the owner) |
-| AI players: MCP server with 60 tools, REST API with OpenAPI, the agent runner that drives the Claude and ChatGPT bots on a schedule with daily cost caps; run reports and spend under Admin → Bots, a public AI journal, Server-Sent Events for API keys and hourly API call logs (Phase 2) | Works (live bot runs need the owner's LLM keys) |
-| claude.ai and ChatGPT connectors: OAuth 2.1 authorization server with the act-as consent screen (Phase 2) | Built; the owner still has to connect both from their accounts |
-| Tests | 1,880 backend tests on H2 and on PostgreSQL, 240 frontend unit tests, Playwright end-to-end on three viewports, agent-runner tests against fake LLM APIs |
-| Delivery: CI, multi-arch image on GHCR, Watchtower on a CasaOS home server behind a Cloudflare Tunnel | Live |
-
-Next: the owner's checklist (bot keys on the server, Cloudflare settings checked from outside, connecting the
-claude.ai and ChatGPT connectors, a push test on a phone, a restore rehearsal; the list is in
-[docs/ROADMAP.md](docs/ROADMAP.md#owner-actions-after-the-wave-a-deploy)), then the later Phase 2 waves: margin
-accounts, seasons, halts and LULD bands, the opening print, engine replay and passkeys.
-
-## How it works
+## Architecture
 
 ```mermaid
 flowchart LR
-  subgraph Players
-    H[Friends<br/>phone and desktop]
-    C[Claude bot]
-    G[ChatGPT bot]
-  end
-  subgraph App["stocks (one Spring Boot app)"]
-    UI[React SPA]
-    API[REST API + OpenAPI]
-    MCP[MCP server]
-    ENG[Trading engine<br/>single writer thread]
-    MD[Market data<br/>quotes, bars, calendar]
-  end
-  DB[(PostgreSQL)]
-  ALP[Alpaca<br/>live quotes and bars]
-  FH[Finnhub<br/>fundamentals, trades]
+    subgraph Players
+        Web["Web app / PWA<br/>React 19 + TypeScript"]
+        Bots["Claude bots<br/>headless Claude Code, one per AI player"]
+        Conn["claude.ai / ChatGPT<br/>connectors (OAuth 2.1)"]
+    end
+    subgraph Home["Home server · Docker Compose on CasaOS"]
+        subgraph App["Spring Boot 4 app"]
+            API["REST API + OpenAPI<br/>STOMP WebSocket · SSE"]
+            MCP["MCP server<br/>63 tools, scoped keys"]
+            ENG["Trading engine<br/>single writer thread"]
+            MD["Market data<br/>quotes, bars, calendar"]
+        end
+        PG[("PostgreSQL 18")]
+    end
+    CF["Cloudflare Tunnel"]
+    ALP["Alpaca<br/>stocks, crypto, options"]
+    GH["GitHub Actions → GHCR"]
 
-  H --> UI --> API
-  C --> MCP
-  G --> MCP
-  API --> ENG
-  MCP --> ENG
-  ENG --> DB
-  MD --> ENG
-  ALP --> MD
-  FH --> MD
+    Web --> CF --> API
+    Conn --> CF --> MCP
+    Bots --> MCP
+    API --> ENG
+    MCP --> ENG
+    ENG --> PG
+    ALP --> MD --> ENG
+    GH -. images, pulled by Watchtower .-> Home
 ```
 
-- **One process, one engine thread.** Every change to orders and money goes through a single thread, one database
-  transaction per command, which makes race conditions impossible and behavior deterministic.
-- **Exact money.** `BigDecimal` everywhere, sent as strings in JSON (no floating point, which matters for LLM
-  clients too). Cash lives in an append-only ledger.
-- **Market data** comes from Alpaca's free plan (IEX quotes, historical bars) plus Finnhub's free plan. A seeded
-  **simulator** replaces both in development and tests, so you need no keys to work on the app.
+- **A modular monolith.** Domain modules (identity, trading, market data, portfolio, league, alerts, bots, MCP) talk
+  only through contract interfaces, and [ArchUnit tests](backend/src/test/java/com/stocks/arch/ArchitectureTest.java)
+  fail the build if one reaches into another.
+- **Humans and bots are the same kind of player.** The web app and the MCP server call the same services with the same
+  rules. Bots can never use admin features: that is blocked in the database, the security layer and the tool list.
+- **Delivery.** Every push to `main` runs the tests, builds a multi-arch image and publishes it to GHCR. Watchtower on
+  the home server rolls it out within minutes, Flyway migrates the database on startup, and a Cloudflare Tunnel
+  publishes the site without opening a port.
+
+## Engineering highlights
+
+**1. A trading engine that can't race.** Every change to orders or money goes through one thread, one database
+transaction per command ([`TradingEngine`](backend/src/main/java/com/stocks/trading/engine/TradingEngine.java)). Two
+fills can never spend the same dollar, behavior is deterministic, and a full queue answers `ENGINE_BUSY` instead of
+slowing everyone down. Money is `BigDecimal` end to end and travels as strings in JSON, and an ArchUnit rule bans
+building a `BigDecimal` from a `double`.
+
+**2. Fills that behave like a real broker's.** [`FillModel`](backend/src/main/java/com/stocks/trading/engine/FillModel.java)
+is pure and golden-file tested:
+- a marketable order takes the displayed size at the touch, then walks up to nine price levels, never past its limit
+  or a 5% market collar;
+- a resting limit fills only when the quote crosses it or a trade prints *through* it, because queue position is unknown;
+- players never trade against each other, so one player's order can't move another's price.
+
+**3. Cash-account rules a real broker enforces.** [`GfvService`](backend/src/main/java/com/stocks/trading/account/GfvService.java)
+tracks which purchases were paid for with unsettled cash, flags a good-faith violation when such a position is sold
+early, warns before an order would cause one, and escalates repeat offenders to settled-cash-only and then to
+liquidation-only for 90 days. [`FeeCalculator`](backend/src/main/java/com/stocks/trading/fees/FeeCalculator.java)
+charges the SEC and FINRA fees on sells.
+
+**4. AI players as first-class users.** The [MCP server](backend/src/main/java/com/stocks/mcp/tools/) exposes 63
+typed tools with scopes that mirror the REST API, and golden snapshots pin every tool's schema. The
+[Claude trader](tools/claude-trader/claude_trader.py) runs each bot as a headless Claude Code check-in on a schedule:
+it loads tool definitions only when needed to cut tokens, and reports plan usage before and after every bot and every
+round to an admin page. A `get_indicators` endpoint gives bots exact moving averages and RSI, so they never estimate.
+
+**5. Strategies backed by data, and revisited when they fail.** Each bot follows a written rule set tested in the
+[strategy lab](tools/strategy-lab/) on ten years of daily data: 2016–21 in sample, 2022–26 out of sample, trading at
+the close with slippage, plus a "one day late" run to see how fragile each rule is. After a month when the Nasdaq fell
+13% and chips fell 26%, the bots' public journals showed every one had followed its rules: the real problem was that
+six of nine were making the same leveraged-tech bet. So one bot became a "Safe Haven" rotation across gold, bonds,
+the dollar and commodities, with a 0.05 correlation to the others.
+
+## Testing and delivery
+
+- **Backend:** 2,100+ tests (JUnit 5, jqwik property tests, ArchUnit), run on H2 and on embedded PostgreSQL 18, so no
+  Docker is needed. Golden files pin the fill model, P&L math, league stats and the JSON contract.
+- **Frontend:** 375 Vitest unit tests and 19 Playwright spec files on phone, tablet and desktop viewports.
+- **Contract:** the OpenAPI spec is generated from the code ([`docs/openapi.json`](docs/openapi.json)) and the
+  frontend's TypeScript API types are generated from it, so the two can't drift apart.
+- **CI/CD:** [GitHub Actions](.github/workflows/) build a `linux/amd64` + `linux/arm64` image on every push to `main`;
+  Watchtower deploys it on the server. Backups and restores are in the [runbook](docs/runbook.md).
 
 ## Tech stack
 
-| Layer | Choice |
-|---|---|
-| Backend | Java 21, Spring Boot 4.1, Spring Security, Spring AI (MCP server), JdbcClient, Flyway |
-| Database | PostgreSQL 18 in production; H2 (PostgreSQL mode) and embedded PostgreSQL for dev and tests, no Docker needed |
-| Frontend | React 19, TypeScript, Vite, TanStack Router and Query, Tailwind CSS 4, TradingView Lightweight Charts |
-| Realtime | STOMP over WebSocket; Server-Sent Events for API clients; Web Push (RFC 8291/8292) |
-| Testing | JUnit, ArchUnit, jqwik, Vitest, Playwright (phone, tablet and desktop viewports) |
-| Delivery | GitHub Actions → multi-arch image on GHCR → Watchtower → Docker Compose on CasaOS, behind a Cloudflare Tunnel (cloudflared sidecar) |
+| Layer | Tech |
+| --- | --- |
+| Backend | Java 21, Spring Boot 4.1 (Web MVC, Security, WebSocket/STOMP, Actuator), Spring AI MCP server, JdbcClient, Flyway, Caffeine, Bucket4j |
+| Data | PostgreSQL 18 (H2 and embedded PostgreSQL for dev and tests) |
+| Web | React 19, TypeScript, Vite, TanStack Router and Query, Tailwind CSS 4, TradingView Lightweight Charts, Workbox PWA with Web Push |
+| AI | Model Context Protocol, OAuth 2.1 authorization server, Claude Code (headless), Anthropic and OpenAI SDKs |
+| Market data | Alpaca (stocks, crypto, options; REST and WebSocket), Finnhub; a seeded simulator for dev and tests |
+| Testing | JUnit 5, jqwik, ArchUnit, Vitest, Testing Library, Playwright; pandas for the strategy backtests |
+| Infra | Docker, Docker Compose, GitHub Actions, GHCR, CasaOS, Watchtower, Cloudflare Tunnel |
 
-## Quick start (development)
+## How I built it
 
-Prerequisites: **JDK 21**, **Node 22.12+** with npm 10, and **make**. Docker is not needed.
+I own the product, the architecture and quality:
+- I decided what the league does and which brokerage rules it enforces.
+- I chose the stack and how the pieces fit together, and I designed, reviewed and retuned the bots' strategies.
+- I review and test every change, and I run the server it lives on.
 
-```sh
-git clone https://github.com/rjgehan/stocks.git
-cd stocks
-make dev        # backend on :8080 (H2 file DB + simulated market) and Vite on :5173
-```
-
-Open <http://localhost:5173> and log in as `admin` / `admin-dev-123`. The dev profile seeds demo players; delete
-`backend/.data/` to start fresh.
-
-| Command | What it does |
-|---|---|
-| `make test` | Backend tests on H2 (with architecture rules and coverage gate) and frontend unit tests |
-| `make test-pg` | The same backend suite on embedded PostgreSQL 18.6 |
-| `make e2e` | Playwright end-to-end tests against the packaged app |
-| `make openapi` | Regenerate `docs/openapi.json` and the frontend's TypeScript API types (commit both) |
-| `make jar` | Build the SPA into the backend and package `backend/target/stocks.jar` |
-| `make image` | Build the Docker image locally |
-| `make help` | Everything else |
+The code was written with [Claude Code](https://claude.com/claude-code) as an AI pair programmer, working to my
+direction; the commits carry its co-author line. Building it this way let one person ship a full brokerage
+simulation, an MCP server and a fleet of bots in a few weeks.
 
 ## Repository layout
 
+| Path | What |
+| --- | --- |
+| [`backend/`](backend/) | Spring Boot 4 / Java 21: API, trading engine, MCP server, Flyway migrations, tests |
+| [`frontend/`](frontend/) | React + Vite web app and PWA, with Playwright end-to-end tests |
+| [`tools/claude-trader/`](tools/claude-trader/) | Runs the Claude bots: scheduled headless Claude Code check-ins, one per AI player |
+| [`tools/strategy-lab/`](tools/strategy-lab/) | The backtests behind the bots' strategies |
+| [`tools/agent-runner/`](tools/agent-runner/) | An earlier bot runner on the Anthropic and OpenAI APIs (TypeScript) |
+| [`deploy/`](deploy/) | Server setup, deploy and backup scripts |
+| [`docs/`](docs/) | [Architecture spec](docs/ARCHITECTURE.md), [roadmap](docs/ROADMAP.md), [deploy guide](docs/deploy.md), [runbook](docs/runbook.md), [bot guide](docs/agents.md), [player rules](docs/rules.md) |
+
+## Running it locally
+
+Needs JDK 21, Node 22.12+ and make. Docker isn't needed: the dev profile uses an H2 database and a simulated market,
+so no API keys either.
+
+```bash
+make dev     # backend on :8080 and Vite on :5173, with demo players
+make test    # backend tests (with architecture rules) and frontend unit tests
+make e2e     # Playwright end to end
 ```
-backend/     Spring Boot app (package com.stocks): API, trading engine, MCP server, Flyway migrations, tests
-frontend/    React SPA: screens, components, API client, Playwright e2e tests
-tools/       agent-runner: the Claude and ChatGPT bots (Node/TypeScript, its own image)
-             claude-trader: Claude Code check-ins on the owner's Claude subscription, one agent per AI player
-             (Python, Mac launch agent or its own image; docs/agents.md §2.10, §2.11)
-deploy/      Server setup and deploy scripts, database backup script, Cloudflare Tunnel example
-docs/        ARCHITECTURE.md (the spec), ROADMAP.md, deploy.md, runbook.md, agents.md, rules.md, openapi.json
-.github/     CI (ci.yml) and release + deploy (release.yml) workflows
-Dockerfile, docker-compose.yml, .env.example, Makefile
-```
 
-## Deployment
+Then open <http://localhost:5173> and log in as `admin` / `admin-dev-123`. To click around the web app with no backend
+at all, run `npm --prefix frontend run dev:mock`.
 
-Every push to `main` runs the full test suite, builds a `linux/amd64` + `linux/arm64` image and publishes it to
-`ghcr.io/rjgehan/stocks:latest`. On the production server (CasaOS, behind a Cloudflare Tunnel),
-**Watchtower** notices the new image and restarts the app; the compose file labels the app for Watchtower and
-keeps it away from the database. Database migrations run automatically on startup.
-
-The guide also documents an optional self-hosted GitHub Actions runner that backs up the database first and **rolls
-back automatically** if a new version doesn't become healthy. It is **only for a private repository or private
-fork**: a self-hosted runner gives root on the server to any workflow that reaches it, so this public repository
-deploys with Watchtower and never registers one.
-
-`docker-compose.yml` runs the app, PostgreSQL, a nightly backup job, the Cloudflare Tunnel client and (optionally)
-the agent runner for the bots, and can also be imported straight into CasaOS. No host port is published: the tunnel
-reaches the app over a private Docker network. Production configuration lives in a `.env` on the server (see [`.env.example`](.env.example)); no secrets
-are ever stored in the repo or the image.
-
-Step-by-step guide: **[docs/deploy.md](docs/deploy.md)**. Operations (backups, restores, failed deploys):
-**[docs/runbook.md](docs/runbook.md)**.
-
-## Documentation
-
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the full build spec (rules, schema, API, MCP tools, UI)
-- [docs/ROADMAP.md](docs/ROADMAP.md): phases and checklists
-- [docs/deploy.md](docs/deploy.md): GitHub, GHCR, CasaOS, Cloudflare Tunnel, upgrades and rollbacks
-- [docs/runbook.md](docs/runbook.md): running the league day to day
-- [docs/agents.md](docs/agents.md): connecting bots (MCP, REST) and the agent runner
-- [docs/rules.md](docs/rules.md): the player rulebook
-- [docs/openapi.json](docs/openapi.json): the REST API (generated)
-
-## Contributing
-
-This is a personal project for a group of friends, but issues and ideas are welcome. Pull requests from outside
-contributors need approval before CI runs (the repository requires approval for all external contributors).
-
-## Disclaimer
-
-For entertainment and learning only. Prices come from third-party market data providers and may be delayed or
-inaccurate. No real money, securities or brokerage accounts are involved, and nothing in this project is investment
-advice. Not affiliated with Webull, Alpaca, Finnhub, Anthropic or OpenAI.
+<sub>Paper money only: there is no brokerage connection, and nothing here is investment advice. The repository is
+still named `stocks`, the project's working name.</sub>
