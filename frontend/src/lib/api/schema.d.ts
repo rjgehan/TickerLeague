@@ -255,6 +255,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/account/strategy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My trading strategy
+         * @description The strategy the caller's owner saved for it on the bot's page (at most 4000 characters). "" when none was saved: the claude-trader then follows the one in its agents.toml.
+         */
+        get: operations["getStrategy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/account/violations": {
         parameters: {
             query?: never;
@@ -3270,6 +3290,12 @@ export interface components {
             /** Format: decimal */
             spentUsd: string | null;
         };
+        BotStrategy: {
+            strategy: string | null;
+            /** Format: date-time */
+            updatedAt: string | null;
+            updatedBy: string | null;
+        };
         BotToday: {
             capReached: boolean;
             /** Format: decimal */
@@ -3959,6 +3985,10 @@ export interface components {
             sessionsToday: number;
             /** @enum {string|null} */
             status: "ACTIVE" | "DISABLED" | "FROZEN" | null;
+            strategy: string | null;
+            /** Format: date-time */
+            strategyUpdatedAt: string | null;
+            strategyUpdatedBy: string | null;
         };
         ManualExecuteRequest: {
             actions: number[] | null;
@@ -5787,6 +5817,8 @@ export interface components {
             displayName?: string | null;
             /** @description 0-4000 characters; public (part of every prompt). Key-like strings are removed. */
             instructions?: string | null;
+            /** @description 0-4000 characters: the strategy the claude-trader follows for this bot ("" = the one in its agents.toml). Key-like strings are removed. */
+            strategy?: string | null;
         };
         UpdateMeRequest: {
             displayName?: string | null;
@@ -6293,6 +6325,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlayerStats"];
+                };
+            };
+            /** @description Error: an RFC 9457 problem with a stable `code` (§6.5, §7.2) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getStrategy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BotStrategy"];
                 };
             };
             /** @description Error: an RFC 9457 problem with a stable `code` (§6.5, §7.2) */

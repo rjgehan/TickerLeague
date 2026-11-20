@@ -127,35 +127,41 @@ function InstructionsCard({ m, handle, canWrite }: { m: ManualBot; handle: strin
   const [instructions, setInstructions] = useState<string | null>(null)
   const [model, setModel] = useState<string | null>(null)
   const [name, setName] = useState<string | null>(null)
+  const [strategy, setStrategy] = useState<string | null>(null)
   const max = m.limits?.maxInstructionsChars ?? 4000
   const textValue = instructions ?? m.instructions ?? ''
   const modelValue = model ?? m.bot?.aiModel ?? ''
   const nameValue = name ?? m.bot?.displayName ?? ''
+  const strategyValue = strategy ?? m.strategy ?? ''
   const changed = {
     instructions: instructions !== null && instructions !== (m.instructions ?? ''),
     model: model !== null && model.trim() !== (m.bot?.aiModel ?? ''),
     name: name !== null && name.trim() !== (m.bot?.displayName ?? ''),
+    strategy: strategy !== null && strategy !== (m.strategy ?? ''),
   }
-  const dirty = changed.instructions || changed.model || changed.name
+  const dirty = changed.instructions || changed.model || changed.name || changed.strategy
   const server = update.error && isApiError(update.error) ? update.error : null
   const nameError = changed.name ? (displayNameError(nameValue) ?? server?.fieldErrors.displayName ?? null) : null
   const modelError = changed.model && !model?.trim() ? 'Enter a model label (1-24 characters).' : (server?.fieldErrors.aiModel ?? null)
   const textError = textValue.length > max ? `At most ${formatInteger(max)} characters.` : (server?.fieldErrors.instructions ?? null)
+  const strategyError = strategyValue.length > max ? `At most ${formatInteger(max)} characters.` : (server?.fieldErrors.strategy ?? null)
   const banner = update.error && !(server && server.problem.fields.length) ? describeError(update.error) : null
   const save = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!dirty || nameError || modelError || textValue.length > max) return
+    if (!dirty || nameError || modelError || textValue.length > max || strategyValue.length > max) return
     update.mutate(
       {
         ...(changed.instructions ? { instructions: textValue } : {}),
         ...(changed.model ? { aiModel: modelValue.trim() } : {}),
         ...(changed.name ? { displayName: nameValue.trim() } : {}),
+        ...(changed.strategy ? { strategy: strategyValue } : {}),
       },
       {
         onSuccess: () => {
           setInstructions(null)
           setModel(null)
           setName(null)
+          setStrategy(null)
           toast({ tone: 'neutral', title: 'Saved' })
         },
       },
@@ -188,6 +194,30 @@ function InstructionsCard({ m, handle, canWrite }: { m: ManualBot; handle: strin
             />
           )}
         </FieldShell>
+        <FieldShell label="Strategy (the automatic Claude trader follows it)" error={strategyError} labelAside={<Counter n={strategyValue.length} max={max} />}>
+          {(id, describedBy) => (
+            <textarea
+              id={id}
+              rows={8}
+              maxLength={max}
+              value={strategyValue}
+              onChange={(e) => setStrategy(e.target.value)}
+              disabled={!canWrite}
+              aria-invalid={strategyError ? true : undefined}
+              aria-describedby={describedBy}
+              placeholder="Empty: the trader uses the strategy in its server file."
+              className={cx(
+                'w-full resize-y rounded-md border bg-bg-2 px-3 py-2 font-mono text-caption text-text-1 outline-none placeholder:text-text-3 focus:border-accent disabled:opacity-50',
+                strategyError ? 'border-down' : 'border-border',
+              )}
+            />
+          )}
+        </FieldShell>
+        <p className="text-micro text-text-3">
+          {m.strategyUpdatedAt
+            ? `Strategy saved ${formatDateTimeEt(m.strategyUpdatedAt)}${m.strategyUpdatedBy ? ` by @${m.strategyUpdatedBy}` : ''}; used from the next check-in.`
+            : 'No strategy saved: the trader uses its server file.'}
+        </p>
         {banner ? (
           <p role="alert" className="rounded-sm bg-down-bg p-2 text-caption text-down">
             {banner.title}

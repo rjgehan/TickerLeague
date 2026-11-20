@@ -487,7 +487,7 @@ claude.ai connector), so each agent trades as its own player and shows up on the
    |---|---|---|
    | `handle` | yes | The player's handle in the app (same rule as the app; unique in the file). |
    | `key` | yes | That player's `stk_` key. |
-   | `strategy` | yes | Your instructions for the agent, at most 4000 characters. It goes into every check-in prompt as "Your strategy (set by the league owner)"; the league rules come first. |
+   | `strategy` | yes | Your instructions for the agent, at most 4000 characters. It goes into every check-in prompt as "Your strategy (set by the league owner)"; the league rules come first. A strategy saved on the bot's page in the app (the bot's console, Settings -> Strategy) wins over this one from the next check-in, so you can change it without touching the server; the trader reads it with the bot's key (`GET /api/v1/account/strategy`) and falls back to this one when none is saved or the app can't be reached. |
    | `schedule_et` | no | Check-in times, ET on weekdays, and on Saturdays and Sundays while the app trades crypto (see "Weekends" below) (default `STOCKS_TRADER_SCHEDULE_ET`, else 09:30, 12:45, 15:50). |
    | `model` | no | A Claude model name or alias (default `STOCKS_TRADER_MODEL`, else Claude Code's default for your plan). |
    | `extra_runs_per_day` | no | Extra check-ins the agent may book for itself per day, 0-10 (default 4; 0 = off). |

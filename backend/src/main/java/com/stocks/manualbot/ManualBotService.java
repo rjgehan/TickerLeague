@@ -31,6 +31,7 @@ import com.stocks.contract.agents.dto.AddJournalNoteRequest;
 import com.stocks.contract.agents.dto.AddJournalNoteResultDto;
 import com.stocks.contract.identity.PlayerQueries;
 import com.stocks.contract.identity.dto.PlayerSummaryDto;
+import com.stocks.contract.manualbot.dto.BotStrategyDto;
 import com.stocks.contract.manualbot.dto.ManualActionDto;
 import com.stocks.contract.manualbot.dto.ManualActionKind;
 import com.stocks.contract.manualbot.dto.ManualActionResultDto;
@@ -274,6 +275,11 @@ public class ManualBotService {
       throw ApiException.validation("instructions", "At most " + String.format(Locale.US, "%,d",
           props.maxInstructionsChars()) + " characters.");
     }
+    String strategy = request == null || request.strategy() == null ? null : cleanInstructions(request.strategy());
+    if (strategy != null && strategy.length() > props.maxInstructionsChars()) {
+      throw ApiException.validation("strategy", "At most " + String.format(Locale.US, "%,d",
+          props.maxInstructionsChars()) + " characters.");
+    }
     String model = request == null || request.aiModel() == null ? null : PlayerService.validateAiModel(
         request.aiModel());
     String name = request == null || request.displayName() == null ? null : request.displayName().trim();
@@ -283,11 +289,14 @@ public class ManualBotService {
         name = null;
       }
     }
-    if (instructions == null && model == null && name == null) {
+    if (instructions == null && strategy == null && model == null && name == null) {
       return dto(bot);
     }
     if (instructions != null) {
       repo.saveInstructions(bot.id(), instructions, human.playerId(), time.now());
+    }
+    if (strategy != null) {
+      repo.saveStrategy(bot.id(), strategy, human.playerId(), time.now());
     }
     if (model != null) {
       players.setAiModel(bot.id(), model);
@@ -299,6 +308,9 @@ public class ManualBotService {
         .withMeta(meta).withTarget("player", bot.publicId());
     if (instructions != null) {
       entry = entry.withDetail("instructionsChars", instructions.length());
+    }
+    if (strategy != null) {
+      entry = entry.withDetail("strategyChars", strategy.length());
     }
     if (model != null) {
       entry = entry.withDetail("aiModel", model);
@@ -323,13 +335,28 @@ public class ManualBotService {
   private ManualBotDto dto(PlayerRecord bot) {
     Instant now = time.now();
     Optional<ManualBotRepository.BotRow> row = repo.bot(bot.id());
+    Optional<ManualBotRepository.BotRow> strategy = repo.strategy(bot.id());
     PlayerSummaryDto summary = playerQueries.byId(bot.id()).orElse(null);
     return new ManualBotDto(summary, ownerHandle(bot), bot.status(),
         row.map(ManualBotRepository.BotRow::instructions).orElse(""),
         row.map(ManualBotRepository.BotRow::updatedAt).orElse(null),
-        row.map(ManualBotRepository.BotRow::updatedByHandle).orElse(null), repo.activeApiKeys(bot.id(), now),
+        row.map(ManualBotRepository.BotRow::updatedByHandle).orElse(null),
+        strategy.map(ManualBotRepository.BotRow::instructions).orElse(""),
+        strategy.map(ManualBotRepository.BotRow::updatedAt).orElse(null),
+        strategy.map(ManualBotRepository.BotRow::updatedByHandle).orElse(null), repo.activeApiKeys(bot.id(), now),
         repo.activeConnectors(bot.id()), repo.sessionsSince(bot.id(), Et.startOfDay(Et.date(now))),
         props.sessionsPerDay(), limits());
+  }
+
+  /**
+   * {@code GET /account/strategy}: the caller's own trading strategy (any player; only AI bots can have one). The
+   * claude-trader reads it with the bot's key before every check-in.
+   */
+  public BotStrategyDto ownStrategy(PlayerPrincipal caller) {
+    Optional<ManualBotRepository.BotRow> row = repo.strategy(caller.playerId());
+    return new BotStrategyDto(row.map(ManualBotRepository.BotRow::instructions).orElse(""),
+        row.map(ManualBotRepository.BotRow::updatedAt).orElse(null),
+        row.map(ManualBotRepository.BotRow::updatedByHandle).orElse(null));
   }
 
   private ManualLimitsDto limits() {

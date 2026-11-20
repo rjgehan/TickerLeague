@@ -31,6 +31,12 @@
 # becomes Safe Haven; Claude Tech and Trend Rider top up when they hold idle cash in an uptrend; Dip Sniper boosts only
 # with a 2% cushion over the 200-day average. Tested and rejected: the cushion for Claude Tech (no consistent gain).
 #
+# Reassessment 2026-11-20, after a month of SPY -8%, QQQ -12%, chips -22%, BTC -23% and gold -12% (reassess2.py):
+# every bot again followed its rules. The trend bots have sat in cash since Nov 5 and dodged the second leg down; the
+# losses are from October. Change: the stock bots park idle cash in BIL (T-bills, ~3.9%/yr) instead of cash at 0%; in
+# the backtests that adds 0.3-0.7 points a year to every trend strategy and never hurts. Tested and rejected: trend
+# exits for Sector Rotation (no gain, and a day late it fell from 9.2% to 6.6% a year).
+#
 # Every rule acts on the day's close: each bot checks in once, at 15:50 ET, every day (stocks only on trading days,
 # crypto every day). A bot reads its trend switches from what it holds, so it needs no memory.
 # Shared definitions: get_indicators <symbol> gives price (today's), sma5, sma50, sma200, vsSma200 (price / sma200 - 1),
@@ -51,7 +57,11 @@ Sleeve A, 70% of the account value (trading days only): get_indicators QQQ.
 Sleeve B, BTC/USD and ETH/USD, at most 15% each (every day): get_indicators for each pair. Target for each coin: 15% of
 the account value if price > sma50 and price > sma200; 7.5% if price > sma50 only; 0% otherwise. Trade a coin only
 when its target changes (buy or sell the difference, MARKET, notional); never rebalance an unchanged target.
-No other trades, no single stocks. Never sell QLD bought today. Quote the indicator values in each rationale.
+No other trades except BIL (below), no single stocks. Never sell QLD bought today. Quote the indicator values in each rationale.
+Idle cash (trading days, after your other trades): cash earns nothing in this league, so if cash minus a crypto reserve of 30% of the account value is
+over $10,000, buy BIL (T-bills) with it, keeping $1,000. Whenever a rule says to buy with cash, with all cash or with a
+share of the account, first sell enough BIL (MARKET; "all cash" includes all your BIL), then buy. BIL never counts as
+a holding for any signal or switch. Never sell BIL bought today.
 """
 
 [[agent]]
@@ -73,6 +83,10 @@ vsSma200 < -0.02. 3x funds: QQQ->TQQQ, SPY->UPRO, SMH->SOXL, XLK->TECL.
 Sleeve B, BTC/USD and ETH/USD, at most 25% each (every day): target 25% of the account value if price > sma50 and
 price > sma200; 12.5% if price > sma50 only; else 0%. Trade a coin only when its target changes.
 Never sell stock bought today. Quote the indicator values in each rationale.
+Idle cash (trading days, after your other trades): cash earns nothing in this league, so if cash minus a crypto reserve of 50% of the account value is
+over $10,000, buy BIL (T-bills) with it, keeping $1,000. Whenever a rule says to buy with cash, with all cash or with a
+share of the account, first sell enough BIL (MARKET; "all cash" includes all your BIL), then buy. BIL never counts as
+a holding for any signal or switch. Never sell BIL bought today.
 """
 
 [[agent]]
@@ -84,7 +98,7 @@ strategy = """
 Tech: semiconductors, boosted to 3x on dips. Hold SMH while it trends up; during a sharp dip switch to SOXL (3x chips)
 and back after the bounce (backtest 2022-26: 34.9%/yr, worst drop -40%). ETFs only: no single stocks (one earnings
 report cost this bot $4.4k). Trading days only. Use get_indicators SMH for every number.
-- Holding SMH or SOXL means the trend is ON; holding neither means OFF. Sell any other position you still hold.
+- Holding SMH or SOXL means the trend is ON; holding neither means OFF. Sell any other position except BIL.
 - OFF: if vsSma200 > 0.02, buy SMH with all cash but $1,000. Otherwise stay in cash.
 - ON, vsSma200 >= -0.02 and SMH + SOXL are under 90% of the account value: buy SMH (never SOXL) with all cash but $1,000, then apply
   the rules below on the next check-in. (A leftover 10% SMH stake once kept this bot 90% in cash.)
@@ -94,6 +108,10 @@ report cost this bot $4.4k). Trading days only. Use get_indicators SMH for every
 - Otherwise do nothing.
 Never sell anything bought today (cash-account rules; the next check-in is fine). Quote price, vsSma200, sma5 and rsi2
 in each rationale.
+Idle cash (trading days, after your other trades): cash earns nothing in this league, so if cash is
+over $10,000, buy BIL (T-bills) with it, keeping $1,000. Whenever a rule says to buy with cash, with all cash or with a
+share of the account, first sell enough BIL (MARKET; "all cash" includes all your BIL), then buy. BIL never counts as
+a holding for any signal or switch. Never sell BIL bought today.
 """
 
 [[agent]]
@@ -110,7 +128,11 @@ Never sell TQQQ bought today.
 Sleeve B, BTC/USD and ETH/USD, at most 25% each (every day): get_indicators for each pair. Target: 25% of the account
 value if price > sma50 and price > sma200; 12.5% if price > sma50 only; 0% otherwise. Trade a coin only when its
 target changes (buy or sell the difference, MARKET, notional).
-No other trades. Quote the indicator values in each rationale.
+No other trades except BIL (below). Quote the indicator values in each rationale.
+Idle cash (trading days, after your other trades): cash earns nothing in this league, so if cash minus a crypto reserve of 50% of the account value is
+over $10,000, buy BIL (T-bills) with it, keeping $1,000. Whenever a rule says to buy with cash, with all cash or with a
+share of the account, first sell enough BIL (MARKET; "all cash" includes all your BIL), then buy. BIL never counts as
+a holding for any signal or switch. Never sell BIL bought today.
 """
 
 [[agent]]
@@ -131,8 +153,12 @@ For each half, get_indicators on its index (SPY or QQQ):
    a breakdown. Backtest: same return, worst drop -21% instead of -25%.)
 5. ON, holding the boost fund, price > sma5: sell it and buy the plain fund with the proceeds.
 6. Otherwise do nothing.
-A half is 50% of the account value when you trade it (MARKET, notional). Never sell anything bought today. No other
-trades. Quote price, vsSma200, sma5 and rsi2 in each rationale.
+A half is 50% of the account value when you trade it (MARKET, notional). Never sell anything bought today. No other trades
+except BIL (below). Quote price, vsSma200, sma5 and rsi2 in each rationale.
+Idle cash (trading days, after your other trades): cash earns nothing in this league, so if cash is
+over $10,000, buy BIL (T-bills) with it, keeping $1,000. Whenever a rule says to buy with cash, with all cash or with a
+share of the account, first sell enough BIL (MARKET; "all cash" includes all your BIL), then buy. BIL never counts as
+a holding for any signal or switch. Never sell BIL bought today.
 """
 
 [[agent]]
@@ -160,13 +186,17 @@ schedule_et = "15:50"
 extra_runs_per_day = 0
 strategy = """
 Trend Rider: own TQQQ (3x Nasdaq-100) only while QQQ trends up; otherwise cash (backtest 2022-26: 26.8%/yr, worst
-drop -43%). Trading days only. First check-in: sell every position that is not TQQQ (the old ChatGPT holdings).
+drop -43%). Trading days only. Sell any position other than TQQQ and BIL.
 get_indicators QQQ:
 - Holding no TQQQ and vsSma200 > 0.02: buy TQQQ with all cash but $1,000 (MARKET, notional).
 - Holding TQQQ and vsSma200 < -0.02: sell all TQQQ.
 - Holding TQQQ, vsSma200 >= -0.02 and more than $10,000 in cash: buy TQQQ with all cash but $1,000.
 - Otherwise do nothing. Between the two lines keep whatever you hold: the band stops whipsaws.
 Never sell TQQQ bought today; never trade on news or intraday moves. Quote price and vsSma200 in each rationale.
+Idle cash (trading days, after your other trades): cash earns nothing in this league, so if cash is
+over $10,000, buy BIL (T-bills) with it, keeping $1,000. Whenever a rule says to buy with cash, with all cash or with a
+share of the account, first sell enough BIL (MARKET; "all cash" includes all your BIL), then buy. BIL never counts as
+a holding for any signal or switch. Never sell BIL bought today.
 """
 
 # ChatGPT Stupid -> Claude Safe Haven (was Chip Rocket, 2026-10-29 to 11-05: -32% in the chip selloff, a copy of Claude

@@ -54,7 +54,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -77,6 +77,7 @@ CLAIM_PATH = "/api/v1/agent-runs/requests/claim"
 CLOCK_PATH = "/api/v1/market/clock"  # server mode: before a weekend check-in (is crypto trading on?)
 HEARTBEAT_PATH = "/api/v1/agent-runs/requests/heartbeat"
 PLAN_USAGE_PATH = "/api/v1/agent-runs/plan-usage"  # server mode: the plan's meters around check-ins and rounds
+STRATEGY_PATH = "/api/v1/account/strategy"  # server mode: the strategy the owner saved on the bot's page
 USAGE_TIMEOUT_S = 90      # Claude Code's /usage: the plan's meters, no model call
 USAGE_CACHE_S = 30        # a reading this recent stands in for a check-in's "before" (check-ins that start together)
 NO_SLOT = "no free session slot"  # why a due check-in waits (Sessions.waiting); run requests leave it that slot
@@ -678,6 +679,37 @@ def check_player(cfg: Config, agent: Agent) -> tuple:
                      f"Players -> {agent.handle} -> API keys issues @{agent.handle}'s key)")
 
 
+def app_strategy(cfg: Config, agent: Agent) -> tuple:
+    """Server mode: GET /api/v1/account/strategy with the agent's key. Returns (the strategy its owner saved on the
+    bot's page, "") or (None, why) when none is saved or the app could not say (an app from before strategies answers
+    404; a network error): the agents file's strategy applies then."""
+    url = api_url(cfg, STRATEGY_PATH)
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {agent.key}", "Accept": "application/json",
+                                               "X-Stocks-Client": CLIENT_HEADER})
+    try:
+        with urllib.request.urlopen(req, timeout=PROBE_TIMEOUT_S) as r:
+            body = json.loads(r.read().decode("utf-8", "replace"))
+    except urllib.error.HTTPError as e:
+        return None, f"the app answers {url} with HTTP {e.code}"
+    except (OSError, ValueError, http.client.HTTPException) as e:
+        return None, f"the app does not answer {url} ({getattr(e, 'reason', None) or e})"
+    text = body.get("strategy") if isinstance(body, dict) else None
+    if not isinstance(text, str) or not text.strip():
+        return None, "none saved on the bot's page"
+    return text.strip()[:STRATEGY_MAX_CHARS], ""
+
+
+def with_app_strategy(cfg: Config, agent: Agent) -> Agent:
+    """The agent with the strategy saved on its page in the app, which wins over the agents file; unchanged (and the
+    file's strategy kept) when there is none."""
+    text, why = app_strategy(cfg, agent)
+    if text is None:
+        log(f"strategy: the agents file's ({why})", agent.handle)
+        return agent
+    log(f"strategy: the one saved on the bot's page ({len(text)} characters)", agent.handle)
+    return replace(agent, strategy=text)
+
+
 def check_crypto(cfg: Config, agent: Agent) -> tuple:
     """Server mode, before a weekend check-in starts: GET /api/v1/market/clock with the agent's key. Returns ("ok",
     "") when its crypto.enabled is true, ("closed", why) when the app answers without it (crypto trading is off, or
@@ -1010,6 +1042,8 @@ def run_session(cfg: Config, agent: Agent, why: str, dry_run: bool = False, outc
         info["error"] = "claude (Claude Code) not found in the trader"
         log("claude (Claude Code) not found; install it and log in with your Claude account first", h)
         return 1
+    if cfg.server:
+        agent = with_app_strategy(cfg, agent)
     s = load_state(agent)
     cmd = session_command(cfg, agent, exe, prompt(agent, now, why, s, dry_run, cfg.weekend_check_ins), dry_run)
     workdir = agent.dir / "workdir"  # an empty directory: no project files, CLAUDE.md or memory leak into the session

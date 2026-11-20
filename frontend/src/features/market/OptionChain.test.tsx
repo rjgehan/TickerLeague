@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, screen, within } from '@testing-library/react'
 import { QueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/api/queryKeys'
@@ -52,6 +52,15 @@ function seed(feed: string, enabled = true): QueryClient {
 }
 
 describe('the Options tab (§30)', () => {
+  // the fixture's quotes are from Oct 23, 2026: days to expiry count from there, whatever today's date
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-23T15:00:00Z'))
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('shows the nearest expiration with days to expiry, shades in-the-money strikes, marks the money and selects a row', async () => {
     const onSelect = vi.fn<(contract: string) => void>()
     renderWithRouter(<OptionChain underlying="AAPL" selected={undefined} onSelect={onSelect} />, seed('indicative'))

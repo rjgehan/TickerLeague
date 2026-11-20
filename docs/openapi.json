@@ -781,6 +781,38 @@
         ]
       }
     },
+    "/api/v1/account/strategy": {
+      "get": {
+        "description": "The strategy the caller's owner saved for it on the bot's page (at most 4000 characters). \"\" when none was saved: the claude-trader then follows the one in its agents.toml.",
+        "operationId": "getStrategy",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BotStrategy"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Error: an RFC 9457 problem with a stable `code` (§6.5, §7.2)"
+          }
+        },
+        "summary": "My trading strategy",
+        "tags": [
+          "account"
+        ]
+      }
+    },
     "/api/v1/account/violations": {
       "get": {
         "description": "The restriction and the active / expired GFVs.",
@@ -10502,6 +10534,35 @@
           "spentUsd"
         ]
       },
+      "BotStrategy": {
+        "type": "object",
+        "properties": {
+          "strategy": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "updatedBy": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "strategy",
+          "updatedAt",
+          "updatedBy"
+        ]
+      },
       "BotToday": {
         "type": "object",
         "properties": {
@@ -13711,6 +13772,25 @@
               "FROZEN",
               null
             ]
+          },
+          "strategy": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "strategyUpdatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "strategyUpdatedBy": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -13724,7 +13804,10 @@
           "ownerHandle",
           "sessionsPerDay",
           "sessionsToday",
-          "status"
+          "status",
+          "strategy",
+          "strategyUpdatedAt",
+          "strategyUpdatedBy"
         ]
       },
       "ManualExecuteRequest": {
@@ -22772,6 +22855,13 @@
               "null"
             ],
             "description": "0-4000 characters; public (part of every prompt). Key-like strings are removed."
+          },
+          "strategy": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "0-4000 characters: the strategy the claude-trader follows for this bot (\"\" = the one in its agents.toml). Key-like strings are removed."
           }
         }
       },

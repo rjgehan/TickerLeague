@@ -14,6 +14,7 @@ export type ManualRouteFn = (method: string, pattern: string, handler: Handler) 
 /** One bot's console state in the mock (`MockState.manualBots[handle]`); sessions oldest first, in detail shape. */
 export interface MockManualBot {
   instructions: string
+  strategy?: { text: string; updatedAt: string; updatedBy: string }
   updatedAt: string | null
   updatedBy: string | null
   sessions: ManualSession[]
@@ -332,6 +333,9 @@ export function registerManualBotRoutes(r: ManualRouteFn, d: ManualMockDeps): vo
       instructions: m.instructions,
       instructionsUpdatedAt: m.updatedAt,
       instructionsUpdatedBy: m.updatedBy,
+      strategy: m.strategy?.text ?? '',
+      strategyUpdatedAt: m.strategy?.updatedAt ?? null,
+      strategyUpdatedBy: m.strategy?.updatedBy ?? null,
       activeApiKeys: d.activeKeys(handle),
       activeConnectors: 0,
       sessionsToday: sessionsToday(m),
@@ -354,12 +358,17 @@ export function registerManualBotRoutes(r: ManualRouteFn, d: ManualMockDeps): vo
   r('PUT', '/me/bots/{handle}/manual', ({ params, body }) => {
     const op = operate(params[0]!, true)
     if (op instanceof Response) return op
-    const b = (body ?? {}) as { instructions?: string | null; aiModel?: string | null; displayName?: string | null }
+    const b = (body ?? {}) as { instructions?: string | null; aiModel?: string | null; displayName?: string | null; strategy?: string | null }
     if (b.displayName != null && !/^[A-Za-z0-9 _.-]{2,40}$/.test(b.displayName.trim())) return invalid('2-40 characters: letters, digits, space, _ . -', 'displayName')
     if (b.instructions != null) {
       const text = b.instructions.replace(/\r\n?/g, '\n').trim().replace(KEY_SHAPED_INLINE, '[redacted]')
       if (text.length > LIMITS.maxInstructionsChars) return invalid(`At most ${LIMITS.maxInstructionsChars} characters.`, 'instructions')
       Object.assign(state(op.handle), { instructions: text, updatedAt: new Date().toISOString(), updatedBy: d.me().handle })
+    }
+    if (b.strategy != null) {
+      const text = b.strategy.replace(/\r\n?/g, '\n').trim().replace(KEY_SHAPED_INLINE, '[redacted]')
+      if (text.length > LIMITS.maxInstructionsChars) return invalid(`At most ${LIMITS.maxInstructionsChars} characters.`, 'strategy')
+      state(op.handle).strategy = { text, updatedAt: new Date().toISOString(), updatedBy: d.me().handle }
     }
     if (b.aiModel != null) {
       const label = b.aiModel.trim()

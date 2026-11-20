@@ -84,6 +84,32 @@ public class ManualBotRepository {
         .update();
   }
 
+  /** The bot's trading strategy for the claude-trader (V16), if one was ever saved. */
+  public Optional<BotRow> strategy(long playerId) {
+    return jdbc.sql("""
+            SELECT s.player_id, s.strategy, p.handle AS updated_by, s.updated_at
+              FROM bot_strategy s JOIN player p ON p.id = s.updated_by
+             WHERE s.player_id = ?""")
+        .param(playerId)
+        .query((rs, n) -> new BotRow(rs.getLong("player_id"), rs.getString("strategy"),
+            rs.getString("updated_by"), Jdbc.instant(rs, "updated_at")))
+        .optional();
+  }
+
+  /** Inserts or replaces the strategy (the §8 cast-everything {@code MERGE}). */
+  public void saveStrategy(long playerId, String strategy, long updatedBy, Instant at) {
+    jdbc.sql("""
+            MERGE INTO bot_strategy t
+            USING (VALUES (CAST(? AS BIGINT), CAST(? AS VARCHAR(4000)), CAST(? AS BIGINT),
+                           CAST(? AS TIMESTAMP WITH TIME ZONE))) AS v(pid, txt, by_id, at)
+               ON t.player_id = v.pid
+            WHEN MATCHED THEN UPDATE SET strategy = v.txt, updated_by = v.by_id, updated_at = v.at
+            WHEN NOT MATCHED THEN INSERT (player_id, strategy, updated_by, updated_at)
+                                  VALUES (v.pid, v.txt, v.by_id, v.at)""")
+        .params(playerId, strategy, updatedBy, Jdbc.ts(at))
+        .update();
+  }
+
   // ------------------------------------------------------------------------------------------- counts
 
   /** Unrevoked, unexpired API keys of the player. */

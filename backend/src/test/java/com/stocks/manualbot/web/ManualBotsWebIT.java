@@ -207,6 +207,42 @@ class ManualBotsWebIT extends ManualBotsTestBase {
     assertThat((Integer) json(state, "$.activeConnectors")).isEqualTo(1);
   }
 
+  @Test
+  void theOwnerSavesAStrategyAndTheBotReadsItWithItsKey() throws Exception {
+    String key = fx.apiKey(bot, properties.security().apiKeyPepper());
+    MockHttpServletResponse none = mvc.perform(get("/api/v1/account/strategy")
+        .header("Authorization", "Bearer " + key)).andReturn().getResponse();
+    assertThat(none.getStatus()).as(none.getContentAsString()).isEqualTo(200);
+    assertThat((String) json(none, "$.strategy")).isEmpty();
+
+    MockHttpServletResponse tooLong = as(ownerP, put(console(bot) + "/manual").contentType(MediaType.APPLICATION_JSON)
+        .content("{\"strategy\": \"" + "x".repeat(4001) + "\"}"));
+    assertThat(tooLong.getStatus()).isEqualTo(400);
+    assertThat((String) json(tooLong, "$.fields[0].field")).isEqualTo("strategy");
+
+    String body = jsonMapper.writeValueAsString(Map.of("strategy", "Hold QQQ above its 200-day.\r\nKey stk_abcdef12_"
+        + "ABCDEFGH12345678 never."));
+    MockHttpServletResponse saved = as(ownerP, put(console(bot) + "/manual").contentType(MediaType.APPLICATION_JSON)
+        .content(body));
+    assertThat(saved.getStatus()).as(saved.getContentAsString()).isEqualTo(200);
+    String expected = "Hold QQQ above its 200-day.\nKey [redacted] never.";
+    assertThat((String) json(saved, "$.strategy")).isEqualTo(expected);
+    assertThat((String) json(saved, "$.strategyUpdatedBy")).isEqualTo(owner.handle());
+    assertThat((String) json(saved, "$.instructions")).as("instructions untouched").isEmpty();
+
+    MockHttpServletResponse read = mvc.perform(get("/api/v1/account/strategy")
+        .header("Authorization", "Bearer " + key)).andReturn().getResponse();
+    assertThat((String) json(read, "$.strategy")).isEqualTo(expected);
+    assertThat((String) json(read, "$.updatedBy")).isEqualTo(owner.handle());
+    String ownerKey = fx.apiKey(owner, properties.security().apiKeyPepper());
+    MockHttpServletResponse other = mvc.perform(get("/api/v1/account/strategy")
+        .header("Authorization", "Bearer " + ownerKey)).andReturn().getResponse();
+    assertThat((String) json(other, "$.strategy")).as("only the caller's own").isEmpty();
+    MockHttpServletResponse byStranger = as(strangerP, put(console(bot) + "/manual")
+        .contentType(MediaType.APPLICATION_JSON).content("{\"strategy\": \"Sell everything.\"}"));
+    assertThat(byStranger.getStatus()).isEqualTo(403);
+  }
+
   // ------------------------------------------------------------------------------------------- prompts
 
   @Test

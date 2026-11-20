@@ -100,6 +100,7 @@ class FakeApp:
         self.finished = []        # (request id, body, headers)
         self.heartbeats = []      # the handle of each heartbeat's key
         self.plan_usage = []      # (the handle of the key, body) of each plan usage snapshot
+        self.strategies = {}      # key -> the strategy saved on the bot's page (GET /api/v1/account/strategy)
         self.finish_status = None
         self.broken = False
         self.clock = {"session": "CLOSED", "tradingDate": None,
@@ -110,9 +111,12 @@ class FakeApp:
             def do_GET(self):
                 app.requests.append((self.path, dict(self.headers)))
                 handle = app.players.get(self.headers.get("Authorization", "").removeprefix("Bearer "))
-                known = self.path in ("/api/v1/me", "/api/v1/market/clock") and handle
+                key = self.headers.get("Authorization", "").removeprefix("Bearer ")
+                known = self.path in ("/api/v1/me", "/api/v1/market/clock", "/api/v1/account/strategy") and handle
                 code = app.status or (200 if known else 401)
-                answer = app.clock if self.path == "/api/v1/market/clock" else {"handle": handle, "kind": "AI"}
+                answer = (app.clock if self.path == "/api/v1/market/clock"
+                          else {"strategy": app.strategies.get(key, ""), "updatedAt": None, "updatedBy": None}
+                          if self.path == "/api/v1/account/strategy" else {"handle": handle, "kind": "AI"})
                 body = json.dumps(answer if code == 200 else {"code": "UNAUTHORIZED"})
                 self.send_response(code)
                 self.send_header("Content-Type", "application/json")
@@ -963,6 +967,25 @@ class RunSessionTest(Base):
             for k in (KEY_A, KEY_B, KEY_C):
                 self.assertNotIn(k, blob)
         self.assertEqual(ct.load_state(ct.pick_agent(ct.load_agents(cfg).agents, "claude"))["summaries"], [])
+
+    def test_the_strategy_saved_on_the_bots_page_wins_over_the_agents_file(self):
+        self.write_agents(agent_toml("claude_tech", KEY_B, "Tech stocks and tech ETFs only."))
+        cfg = self.cfg()
+        agent = ct.pick_agent(ct.load_agents(cfg).agents, "claude_tech")
+        self.app.strategies[KEY_B] = "  Hold SMH while it trends up; otherwise BIL.  "
+        with fixed(WED), capture() as out:
+            self.assertEqual(ct.run_session(cfg, agent, "the 09:30 ET scheduled check-in"), 0, out.getvalue())
+        prompt = self.records()[-1]["prompt"]
+        self.assertIn("=== strategy start ===\nHold SMH while it trends up; otherwise BIL.\n=== strategy end ===", prompt)
+        self.assertNotIn("Tech stocks and tech ETFs only.", prompt)
+        self.assertIn("[claude_tech] strategy: the one saved on the bot's page (43 characters)", out.getvalue())
+        self.assertEqual(agent.strategy, "Tech stocks and tech ETFs only.")   # the loaded agent is not changed
+
+        self.app.strategies[KEY_B] = ""
+        with fixed(WED), capture() as out:
+            self.assertEqual(ct.run_session(cfg, agent, "a check-in started by hand"), 0, out.getvalue())
+        self.assertIn("Tech stocks and tech ETFs only.", self.records()[-1]["prompt"])
+        self.assertIn("strategy: the agents file's (none saved on the bot's page)", out.getvalue())
 
     def test_mac_session_and_refused_booking(self):
         os.environ["FAKE_RESULT"] = "Nothing to do.\nEXTRA_RUN: 2026-10-17 10:00 | weekend"
