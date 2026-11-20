@@ -20,7 +20,8 @@ import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 /**
- * Column R of §21.1 (and {@code POST /me/api-keys}, §18.1): exactly these routes carry {@link RecentAuth}, and each
+ * Column R of §21.1 (and {@code POST /me/api-keys}, §18.1, and the runner key): exactly these routes carry
+ * {@link RecentAuth}, and each
  * one answers 403 {@code RECENT_AUTH_REQUIRED} to an admin whose password check is older than 15 minutes.
  */
 class RecentAuthRoutesIT extends ContractMocksWebTest {
@@ -43,7 +44,8 @@ class RecentAuthRoutesIT extends ContractMocksWebTest {
       "POST /api/v1/admin/calendar/overrides",
       "DELETE /api/v1/admin/calendar/overrides/{date}",
       "POST /api/v1/admin/corporate-actions/{id}/resolve",
-      "POST /api/v1/me/api-keys");
+      "POST /api/v1/me/api-keys",
+      "POST /api/v1/me/bots/runner-key");
 
   @Autowired @Qualifier("requestMappingHandlerMapping") RequestMappingHandlerMapping mappings;
 
