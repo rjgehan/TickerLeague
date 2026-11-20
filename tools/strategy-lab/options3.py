@@ -1,0 +1,10 @@
+import warnings; warnings.filterwarnings("ignore")
+from options2 import run, hdr
+hdr("E. Longer calls, uptrend only, the rest in BIL")
+run("  20% 6-month ATM calls, re-bought every 2 months", alloc=0.20, dte=182, hold=60, mode="calls")
+run("  30% 6-month ATM calls, re-bought every 2 months", alloc=0.30, dte=182, hold=60, mode="calls")
+run("  40% 1-year calls 20% ITM, re-bought every 3 months", alloc=0.40, call_m=-0.20, dte=365, hold=91, mode="calls")
+run("  50% 1-year calls 20% ITM, re-bought every 3 months", alloc=0.50, call_m=-0.20, dte=365, hold=91, mode="calls")
+run("  60% 1-year calls 20% ITM, re-bought every 3 months", alloc=0.60, call_m=-0.20, dte=365, hold=91, mode="calls")
+run("  50% 1-year calls 10% ITM, re-bought every 3 months", alloc=0.50, call_m=-0.10, dte=365, hold=91, mode="calls")
+run("  SPY 50% 1-year calls 20% ITM", und="SPY", vix="VIX", q=0.013, alloc=0.50, call_m=-0.20, dte=365, hold=91, mode="calls")

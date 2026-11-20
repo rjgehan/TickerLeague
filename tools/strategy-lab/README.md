@@ -21,6 +21,9 @@ PYTHONPATH=site:. python dips2.py     # dip-buying upgrades (resting orders, cor
 PYTHONPATH=site:. python blends2.py   # the blends behind the six bots
 PYTHONPATH=site:. python reassess.py   # 2026-11-05: dip cushion, non-tech diversifiers
 PYTHONPATH=site:. python safehaven.py  # Safe Haven sensitivity and blend
+PYTHONPATH=site:. python reassess2.py   # 2026-11-20: sector-rotation exits, idle cash in BIL
+PYTHONPATH=site:. python options2.py    # options bots (approximate Black-Scholes prices): trend calls and puts
+PYTHONPATH=site:. python options3.py    # longer-dated calls (the Claude Calls bot)
 ```
 
 ## Results (run of 2026-10-27)
