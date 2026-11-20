@@ -87,7 +87,8 @@ public class ApiKeyService {
    */
   public IssuedKey issue(long playerId, String name, Set<String> scopes, Instant expiresAtOrNull, long createdBy) {
     String n = validateName(name);
-    if (scopes == null || scopes.isEmpty() || !Scopes.ALL.containsAll(scopes)) {
+    if (scopes == null || scopes.isEmpty()
+        || !Scopes.ALL.containsAll(scopes) && !scopes.equals(Set.of(Scopes.BOTS_RUN))) {
       throw ApiException.validation("scopes", "A non-empty subset of " + new TreeSet<>(Scopes.ALL));
     }
     if (!properties.security().hasApiKeyPepper()) {

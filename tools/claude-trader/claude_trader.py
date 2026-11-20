@@ -78,6 +78,9 @@ CLOCK_PATH = "/api/v1/market/clock"  # server mode: before a weekend check-in (i
 HEARTBEAT_PATH = "/api/v1/agent-runs/requests/heartbeat"
 PLAN_USAGE_PATH = "/api/v1/agent-runs/plan-usage"  # server mode: the plan's meters around check-ins and rounds
 STRATEGY_PATH = "/api/v1/account/strategy"  # server mode: the strategy the owner saved on the bot's page
+RUNNER_BOTS_PATH = "/api/v1/runner/bots"     # server mode, with a [runner] key: the owner's bots with a strategy
+RUNNER_KEY_PATH = "/api/v1/runner/bots/{}/key"  # ... and a key for each (kept in runner-keys.json, mode 600)
+RUNNER_REFRESH_S = 300    # how often the runner asks the app for its bots
 USAGE_TIMEOUT_S = 90      # Claude Code's /usage: the plan's meters, no model call
 USAGE_CACHE_S = 30        # a reading this recent stands in for a check-in's "before" (check-ins that start together)
 NO_SLOT = "no free session slot"  # why a due check-in waits (Sessions.waiting); run requests leave it that slot
@@ -265,6 +268,15 @@ class Agent:
     enabled: bool = True
     strategy: str = ""      # empty: no strategy block (Mac mode)
     key: str = field(default="", repr=False)
+    auto: bool = False      # found by the [runner] key; its key came from the app (runner-keys.json)
+
+
+@dataclass
+class Runner:
+    """The agents file's [runner] table: a bot owner's runner key (scope bots:run) that finds their bots in the app."""
+    key: str = field(default="", repr=False)
+    schedule: list = field(default_factory=list)
+    model: str = ""
 
 
 @dataclass
@@ -272,6 +284,7 @@ class Agents:
     agents: list
     source: str             # one line for the log: where the agents came from
     warnings: list = field(default_factory=list)
+    runner: Runner | None = None
 
 
 def agent_dir(cfg: Config, handle: str) -> Path:
@@ -290,7 +303,10 @@ def load_agents(cfg: Config) -> Agents:
     except OSError as e:  # e.g. a data directory uid 1000 cannot search (Python 3.11's exists() raises then)
         raise ConfigError(f"agents file {path} cannot be read ({e.strerror}); on the server: {CHOWN_HINT}") from None
     if found:
-        return parse_agents_file(cfg, path)
+        got = parse_agents_file(cfg, path)
+        if got.runner:
+            add_runner_agents(cfg, got)
+        return got
     if cfg.agents_file_explicit:
         raise ConfigError(f"STOCKS_TRADER_AGENTS is {path}, which does not exist")
     if cfg.fallback_key:
@@ -332,16 +348,18 @@ def parse_agents_file(cfg: Config, path: Path) -> Agents:
         warnings.append(f"{path} is readable by other users (mode {st.st_mode & 0o777:o}) and holds API keys: "
                         f"chmod 600 {path}")
     problems = []
-    extra_top = sorted(k for k in doc if k != "agent")
+    extra_top = sorted(k for k in doc if k not in ("agent", "runner"))
     if extra_top:
         problems.append(f"unknown top-level setting(s) {', '.join(redact(k)[:40] for k in extra_top)} "
-                        "(only [[agent]] tables)")
+                        "(only [[agent]] tables and one [runner] table)")
+    runner, runner_errs = parse_runner(cfg, doc["runner"]) if "runner" in doc else (None, [])
+    problems += [f"[runner]: {e}" for e in runner_errs]
     tables = doc.get("agent", [])
     if not isinstance(tables, list) or not all(isinstance(t, dict) for t in tables):
         problems.append("agents must be [[agent]] tables")
         tables = []
-    elif not tables and not extra_top:
-        problems.append("no [[agent]] table")
+    elif not tables and not extra_top and "runner" not in doc:
+        problems.append("no [[agent]] table and no [runner] table")
     agents, seen, keys = [], {}, {}
     for i, t in enumerate(tables, 1):
         a, errs = parse_agent(cfg, t)
@@ -363,7 +381,36 @@ def parse_agents_file(cfg: Config, path: Path) -> Agents:
     disabled = [a.handle for a in agents if not a.enabled]
     source = (f"{where}: {len(agents)} agent(s), enabled: {', '.join(enabled) or 'none'}"
               + (f"; disabled: {', '.join(disabled)}" if disabled else ""))
-    return Agents(agents, source, warnings)
+    return Agents(agents, source, warnings, runner)
+
+
+def parse_runner(cfg: Config, t) -> tuple:
+    """The [runner] table -> (Runner or None, [problems]). Problems never quote the key."""
+    if not isinstance(t, dict):
+        return None, ['must be a table: [runner] with key = "stk_..."']
+    errs = []
+    unknown = sorted(k for k in t if k not in ("key", "schedule_et", "model"))
+    if unknown:
+        errs.append(f"unknown setting(s) {', '.join(redact(k)[:40] for k in unknown)} (allowed: key, schedule_et, "
+                    "model)")
+    key = t.get("key")
+    key = key.strip() if isinstance(key, str) else ""
+    if not key.startswith("stk_") or re.search(r"\s", key) or key == PLACEHOLDER_KEY:
+        errs.append("key must be the runner key from Admin -> Bots -> Issue runner key (stk_...)")
+        key = ""
+    else:
+        add_secret(key)
+    schedule = cfg.schedule
+    if "schedule_et" in t:
+        try:
+            schedule = parse_schedule(t["schedule_et"], "schedule_et")
+        except ConfigError as e:
+            errs.append(str(e))
+    model = t.get("model", cfg.model)
+    if not isinstance(model, str):
+        errs.append("model must be a string")
+        model = cfg.model
+    return (Runner(key, schedule, model.strip() or cfg.model) if key else None), errs
 
 
 def parse_agent(cfg: Config, t: dict):
@@ -677,6 +724,114 @@ def check_player(cfg: Config, agent: Agent) -> tuple:
         return "ok", ""
     return "wrong", (f"the key in the agents file for @{agent.handle} belongs to @{handle or '?'}; fix it (Admin -> "
                      f"Players -> {agent.handle} -> API keys issues @{agent.handle}'s key)")
+
+
+RUNNER_CACHE = {"at": 0.0, "bots": None, "why": ""}  # the runner's last list of bots, refreshed every 5 minutes
+
+
+def runner_keys_path(cfg: Config) -> Path:
+    return cfg.home / "runner-keys.json"
+
+
+def load_runner_keys(cfg: Config) -> dict:
+    try:
+        data = json.loads(runner_keys_path(cfg).read_text())
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    keys = {h: k for h, k in data.items() if isinstance(h, str) and isinstance(k, str)}
+    for k in keys.values():
+        add_secret(k)
+    return keys
+
+
+def save_runner_keys(cfg: Config, keys: dict) -> None:
+    cfg.home.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=cfg.home, prefix=".runner-keys-", suffix=".tmp")  # mode 0600, a name of its own
+    with os.fdopen(fd, "w") as f:
+        f.write(json.dumps(keys, indent=2, sort_keys=True) + "\n")
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, runner_keys_path(cfg))
+
+
+def forget_runner_key(cfg: Config, handle: str) -> None:
+    """Drops a bot's runner-issued key (the app refused it), so the next round gets a new one."""
+    keys = load_runner_keys(cfg)
+    if keys.pop(handle, None) is not None:
+        save_runner_keys(cfg, keys)
+
+
+def runner_bots(cfg: Config, runner: Runner) -> tuple:
+    """GET /api/v1/runner/bots with the runner key, at most every RUNNER_REFRESH_S seconds: (the bots, "") or (the
+    last list it got, None before any, and why it could not ask now)."""
+    now = time.monotonic()
+    if RUNNER_CACHE["bots"] is not None and now - RUNNER_CACHE["at"] < RUNNER_REFRESH_S:
+        return RUNNER_CACHE["bots"], RUNNER_CACHE["why"]
+    url = api_url(cfg, RUNNER_BOTS_PATH)
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {runner.key}", "Accept": "application/json",
+                                               "X-Stocks-Client": CLIENT_HEADER})
+    try:
+        with urllib.request.urlopen(req, timeout=PROBE_TIMEOUT_S) as r:
+            body = json.loads(r.read().decode("utf-8", "replace"))
+        bots = [b for b in body if isinstance(b, dict) and isinstance(b.get("handle"), str)
+                and HANDLE_RE.match(b["handle"])] if isinstance(body, list) else []
+        RUNNER_CACHE.update(at=now, bots=bots, why="")
+    except urllib.error.HTTPError as e:
+        why = (f"the app refuses the runner key (HTTP {e.code}: revoked? issue a new one under Admin -> Bots)"
+               if e.code in (401, 403) else f"the app answers {url} with HTTP {e.code}")
+        RUNNER_CACHE.update(at=now, why=why)
+    except (OSError, ValueError, http.client.HTTPException) as e:
+        RUNNER_CACHE.update(at=now, why=f"the app does not answer {url} ({getattr(e, 'reason', None) or e})")
+    return RUNNER_CACHE["bots"], RUNNER_CACHE["why"]
+
+
+def mint_runner_key(cfg: Config, runner: Runner, handle: str) -> tuple:
+    """POST /api/v1/runner/bots/{handle}/key with the runner key: (the bot's new key, "") or (None, why)."""
+    holder = Agent(handle, Path("."), [], key=runner.key)
+    try:
+        status, answer = api_post(cfg, holder, RUNNER_KEY_PATH.format(urllib.parse.quote(handle)))
+    except OSError as e:
+        return None, f"the app could not be reached ({e})"
+    token = answer.get("token") if isinstance(answer, dict) else None
+    if status == 201 and isinstance(token, str) and token.startswith("stk_"):
+        add_secret(token)
+        return token, ""
+    return None, http_problem(status, answer)
+
+
+def add_runner_agents(cfg: Config, got: Agents) -> None:
+    """Adds the runner's bots that the agents file does not list, each with the key the app issued for it (asked
+    for once and kept in runner-keys.json). The file's own agents always win."""
+    runner = got.runner
+    bots, why = runner_bots(cfg, runner)
+    if why:
+        got.warnings.append(f"runner: {why}" + ("; running the bots it found last time" if bots else ""))
+    if not bots:
+        got.source += "; runner: no bots" + (" yet" if bots is None else " with a strategy saved")
+        return
+    listed = {a.handle for a in got.agents}
+    keys = load_runner_keys(cfg)
+    added, changed = [], False
+    for b in bots:
+        h = b["handle"]
+        if h in listed:
+            continue
+        key = keys.get(h)
+        if not key:
+            key, problem = mint_runner_key(cfg, runner, h)
+            if not key:
+                got.warnings.append(f"runner: no key for @{h} yet: {problem}")
+                continue
+            keys[h] = key
+            changed = True
+        strategy = b.get("strategy") if isinstance(b.get("strategy"), str) else ""
+        got.agents.append(Agent(h, agent_dir(cfg, h), runner.schedule, runner.model, 0, True,
+                                strategy.strip()[:STRATEGY_MAX_CHARS], key, auto=True))
+        added.append(h)
+    if changed:
+        save_runner_keys(cfg, keys)
+    got.source += f"; runner: {', '.join(added) or 'nothing new'} from the app"
 
 
 def app_strategy(cfg: Config, agent: Agent) -> tuple:
@@ -1297,6 +1452,8 @@ def tick_agent(cfg: Config, agent: Agent, sessions: Sessions, now: datetime) -> 
                 for _, key, _ in due:
                     log(f"skipped the {key} ET check-in: {why_not}", h)
             elif verdict != "ok":
+                if agent.auto:  # a runner-issued key the app refuses: the next round asks for a new one
+                    forget_runner_key(cfg, h)
                 problem = f"ERROR: {why_not}. The check-in waits until its grace period ends."
                 waited.update({k: f"its key is not @{h}'s" for k in keys})
             else:

@@ -4789,6 +4789,38 @@
         ]
       }
     },
+    "/api/v1/me/bots/runner-key": {
+      "post": {
+        "description": "Session only, recent password check, a person who owns at least one bot. The key has the single scope bots:run: it lists your bots that have a strategy saved on their page and gets a key for each, and nothing else. Your earlier runner keys are revoked. Put it in the trader's agents.toml as [runner] key. The token is shown once.",
+        "operationId": "issueRunnerKey",
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyCreated"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Error: an RFC 9457 problem with a stable `code` (§6.5, §7.2)"
+          }
+        },
+        "summary": "Issue the claude-trader's runner key",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
     "/api/v1/me/bots/{handle}/manual": {
       "get": {
         "description": "The owner (or the admin) only: instructions, the bot's status, active API keys and connectors, prompts made today and the console limits. Works for frozen bots (writes do not).",
@@ -7376,6 +7408,83 @@
         "summary": "The rulebook",
         "tags": [
           "rules"
+        ]
+      }
+    },
+    "/api/v1/runner/bots": {
+      "get": {
+        "description": "Runner key only (bots:run): the key owner's active bots with a strategy saved on their page, by handle.",
+        "operationId": "getRunnerBots",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RunnerBot"
+                  }
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Error: an RFC 9457 problem with a stable `code` (§6.5, §7.2)"
+          }
+        },
+        "summary": "The bots a runner key runs",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
+    "/api/v1/runner/bots/{handle}/key": {
+      "post": {
+        "description": "Runner key only (bots:run). All four scopes, named \"claude-trader (auto)\"; the bot's earlier runner-issued keys are revoked. The token is shown once. Errors: PLAYER_NOT_FOUND (not your bot), FORBIDDEN (frozen, or no strategy saved).",
+        "operationId": "issueRunnerBotKey",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "handle",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnerKey"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Error: an RFC 9457 problem with a stable `code` (§6.5, §7.2)"
+          }
+        },
+        "summary": "A new key for one of the runner's bots",
+        "tags": [
+          "agents"
         ]
       }
     },
@@ -20957,6 +21066,70 @@
           "botStatus",
           "requests",
           "traderSeenAt"
+        ]
+      },
+      "RunnerBot": {
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "handle": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "strategy": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "strategyUpdatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "displayName",
+          "handle",
+          "strategy",
+          "strategyUpdatedAt"
+        ]
+      },
+      "RunnerKey": {
+        "type": "object",
+        "properties": {
+          "handle": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "keyId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "handle",
+          "keyId",
+          "token"
         ]
       },
       "ScreenCoverage": {

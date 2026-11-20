@@ -1681,6 +1681,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/bots/runner-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue the claude-trader's runner key
+         * @description Session only, recent password check, a person who owns at least one bot. The key has the single scope bots:run: it lists your bots that have a strategy saved on their page and gets a key for each, and nothing else. Your earlier runner keys are revoked. Put it in the trader's agents.toml as [runner] key. The token is shown once.
+         */
+        post: operations["issueRunnerKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/bots/{handle}/manual": {
         parameters: {
             query?: never;
@@ -2576,6 +2596,46 @@ export interface paths {
         get: operations["rules"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runner/bots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The bots a runner key runs
+         * @description Runner key only (bots:run): the key owner's active bots with a strategy saved on their page, by handle.
+         */
+        get: operations["getRunnerBots"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runner/bots/{handle}/key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A new key for one of the runner's bots
+         * @description Runner key only (bots:run). All four scopes, named "claude-trader (auto)"; the bot's earlier runner-issued keys are revoked. The token is shown once. Errors: PLAYER_NOT_FOUND (not your bot), FORBIDDEN (frozen, or no strategy saved).
+         */
+        post: operations["issueRunnerBotKey"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5420,6 +5480,18 @@ export interface components {
              * @description When a trader last asked for the bot's run requests (with the bot's own key); null when none has since the app started
              */
             traderSeenAt: string | null;
+        };
+        RunnerBot: {
+            displayName: string | null;
+            handle: string | null;
+            strategy: string | null;
+            /** Format: date-time */
+            strategyUpdatedAt: string | null;
+        };
+        RunnerKey: {
+            handle: string | null;
+            keyId: string | null;
+            token: string | null;
         };
         ScreenCoverage: {
             /** Format: int32 */
@@ -9028,6 +9100,35 @@ export interface operations {
             };
         };
     };
+    issueRunnerKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiKeyCreated"];
+                };
+            };
+            /** @description Error: an RFC 9457 problem with a stable `code` (§6.5, §7.2) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     getManualBot: {
         parameters: {
             query?: never;
@@ -10761,6 +10862,66 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Rules"];
+                };
+            };
+            /** @description Error: an RFC 9457 problem with a stable `code` (§6.5, §7.2) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getRunnerBots: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunnerBot"][];
+                };
+            };
+            /** @description Error: an RFC 9457 problem with a stable `code` (§6.5, §7.2) */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    issueRunnerBotKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                handle: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunnerKey"];
                 };
             };
             /** @description Error: an RFC 9457 problem with a stable `code` (§6.5, §7.2) */

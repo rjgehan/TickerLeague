@@ -522,6 +522,21 @@ claude.ai connector), so each agent trades as its own player and shows up on the
 
 **Day to day.**
 
+- **Run your bots from the app with a runner key (no key copying).** Under Admin -> Bots, **Issue runner key**
+  (recent password check) gives a key with the single scope `bots:run`. Put it in `agents.toml` once:
+
+  ```toml
+  [runner]
+  key = "stk_..."          # the runner key; it can only list your bots and get their keys
+  schedule_et = "15:50"    # optional: when the runner's bots check in (default STOCKS_TRADER_SCHEDULE_ET)
+  ```
+
+  Every 5 minutes the trader asks the app for your active bots that have a strategy saved on their page
+  (`GET /api/v1/runner/bots`) and, the first time it sees one, gets a key for it
+  (`POST /api/v1/runner/bots/{handle}/key`, kept in `trader-data/runner-keys.json`, mode 600; a key the app refuses
+  is replaced). So a new bot is: create it under Admin -> Players (no key needed), save its strategy on its page, and
+  it checks in from the next scheduled time. Clearing its strategy or freezing it stops it. A bot also listed as an
+  `[[agent]]` in the file uses the file's settings and key. A new runner key ends the old one.
 - **Add, change, pause or remove an agent** by editing `trader-data/agents.toml` (`sudo nano …`); the trader re-reads
   it every minute, no restart needed. `sudo docker logs stocks-claude-trader` then shows the agents it loaded, or ONE
   error naming every problem (an invalid file runs no agent until it is fixed). A new agent needs its player and key

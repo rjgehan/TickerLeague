@@ -96,6 +96,12 @@ public class ManualBotRepository {
         .optional();
   }
 
+  /** The key ids of the player's live keys with this name (the runner's keys, to replace them). */
+  public List<String> liveKeyIdsNamed(long playerId, String name) {
+    return jdbc.sql("SELECT key_id FROM api_key WHERE player_id = ? AND name = ? AND revoked_at IS NULL")
+        .params(playerId, name).query(String.class).list();
+  }
+
   /** Inserts or replaces the strategy (the §8 cast-everything {@code MERGE}). */
   public void saveStrategy(long playerId, String strategy, long updatedBy, Instant at) {
     jdbc.sql("""

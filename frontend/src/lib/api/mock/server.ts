@@ -783,6 +783,13 @@ export class MockServer {
       if (scopes.includes('trade') && !this.s.apiTradingAllowed) return problem(403, 'FORBIDDEN_SCOPE', 'Trade scope not allowed', 'The admin has not enabled API trading for you.')
       return json(this.issueKey(this.s.me.handle, b.name.trim(), scopes, b.expiresInDays ?? null), 201)
     })
+    // the claude-trader's runner key (bots:run): a new one ends the old ones
+    r('POST', '/me/bots/runner-key', () => {
+      const stale = this.requireRecentAuth()
+      if (stale) return stale
+      for (const k of this.s.keys) if (k.handle === this.s.me.handle && k.name === 'claude-trader runner') k.revokedAt ??= iso()
+      return json(this.issueKey(this.s.me.handle, 'claude-trader runner', ['bots:run'], null), 201)
+    })
     r('DELETE', '/me/api-keys/{keyId}', ({ params }) => {
       const k = this.s.keys.find((x) => x.keyId === params[0] && x.handle === this.s.me.handle)
       if (!k) return problem(404, 'NOT_FOUND', 'Not found')

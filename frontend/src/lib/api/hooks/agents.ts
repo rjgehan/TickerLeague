@@ -5,6 +5,7 @@
 import { type QueryClient, queryOptions, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, unwrap } from '../client'
 import { queryKeys } from '../queryKeys'
+import { withRecentAuth } from '../reauth'
 import type { RunRequest, RunRequestList } from '../types'
 
 export const agentKeys = {
@@ -197,5 +198,12 @@ export function useApiCalls(scope: 'mine' | 'everyone', handle: string) {
     getNextPageParam: (last) => last.nextCursor ?? undefined,
     staleTime: 10_000,
     retry: false,
+  })
+}
+
+/** The claude-trader's runner key (bots:run): its owner issues it once; the old one ends. Recent password check. */
+export function useIssueRunnerKey() {
+  return useMutation({
+    mutationFn: () => withRecentAuth(() => unwrap(api.POST('/api/v1/me/bots/runner-key'))),
   })
 }

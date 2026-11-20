@@ -273,6 +273,8 @@ public class SecurityConfig {
                 "/api/v1/agent-runs/requests/claim", "/api/v1/agent-runs/requests/heartbeat",
                 "/api/v1/agent-runs/requests/*/finish", "/api/v1/agent-runs/plan-usage")
                 .access(RouteAuthorization.scope(Scopes.TRADE))
+            // the claude-trader's runner key (bots:run) lists its owner's bots and gets their keys; nothing else has it
+            .requestMatchers("/api/v1/runner/**").access(RouteAuthorization.scope(Scopes.BOTS_RUN))
             .requestMatchers(HttpMethod.PATCH, "/api/v1/orders/*").access(RouteAuthorization.scope(Scopes.TRADE))
             .requestMatchers(HttpMethod.PUT, "/api/v1/watchlists/**").access(RouteAuthorization.scope(Scopes.TRADE))
             .requestMatchers(HttpMethod.DELETE, "/api/v1/orders", "/api/v1/orders/*", "/api/v1/watchlists/**")

@@ -101,6 +101,9 @@ class FakeApp:
         self.heartbeats = []      # the handle of each heartbeat's key
         self.plan_usage = []      # (the handle of the key, body) of each plan usage snapshot
         self.strategies = {}      # key -> the strategy saved on the bot's page (GET /api/v1/account/strategy)
+        self.runner_key = None    # the key GET /api/v1/runner/bots and POST .../{handle}/key accept
+        self.runner_bots = []     # what GET /api/v1/runner/bots lists
+        self.minted = []          # the handle of each key POST /api/v1/runner/bots/{handle}/key issued
         self.finish_status = None
         self.broken = False
         self.clock = {"session": "CLOSED", "tradingDate": None,
@@ -110,6 +113,13 @@ class FakeApp:
         class Handler(http.server.BaseHTTPRequestHandler):
             def do_GET(self):
                 app.requests.append((self.path, dict(self.headers)))
+                if self.path == "/api/v1/runner/bots":
+                    ok = app.runner_key and self.headers.get("Authorization") == f"Bearer {app.runner_key}"
+                    self.send_response(200 if ok else 401)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps(app.runner_bots if ok else {"code": "UNAUTHORIZED"}).encode())
+                    return
                 handle = app.players.get(self.headers.get("Authorization", "").removeprefix("Bearer "))
                 key = self.headers.get("Authorization", "").removeprefix("Bearer ")
                 known = self.path in ("/api/v1/me", "/api/v1/market/clock", "/api/v1/account/strategy") and handle
@@ -147,6 +157,15 @@ class FakeApp:
                     else:
                         app.heartbeats.append(app.players[key])
                         code, out = 204, None
+                elif self.path.startswith("/api/v1/runner/bots/") and self.path.endswith("/key"):
+                    handle = self.path.split("/")[-2]
+                    if not app.runner_key or key != app.runner_key:
+                        code, out = 401, {"code": "UNAUTHORIZED"}
+                    else:
+                        app.minted.append(handle)
+                        token = f"stk_mint{len(app.minted):04d}_{handle}secretsecretsecret"
+                        app.players[token] = handle
+                        code, out = 201, {"handle": handle, "keyId": "mint", "token": token}
                 elif self.path == "/api/v1/agent-runs/plan-usage":
                     app.plan_usage.append((app.players.get(key), body))
                     code, out = 201, body
@@ -206,6 +225,7 @@ class Base(unittest.TestCase):
             os.environ.pop(k, None)
         self.handlers = {s: signal.getsignal(s) for s in (signal.SIGTERM, signal.SIGINT)}
         ct.STOP.clear()
+        ct.RUNNER_CACHE.update(at=0.0, bots=None, why="")
 
     def tearDown(self):
         ct.STOP.clear()
@@ -436,6 +456,64 @@ class AgentsFileTest(Base):
 
 
 # ------------------------------------------------------------------------------------------------ extra check-ins
+
+class RunnerTest(Base):
+    """A [runner] key finds the owner's bots in the app and gets each one's key, once."""
+
+    RUNNER = "stk_runner000000_runnersecretrunnersecret"
+
+    def test_the_runner_adds_the_apps_bots_and_keeps_their_keys(self):
+        self.app.runner_key = self.RUNNER
+        self.app.runner_bots = [{"handle": "claude_calls", "displayName": "Claude Calls", "strategy": "Buy calls."},
+                                {"handle": "claude", "displayName": "Claude", "strategy": "From the app."}]
+        self.write_agents(f'[runner]\nkey = "{self.RUNNER}"\nschedule_et = "15:50"\n\n' +
+                          agent_toml("claude", KEY_A, "From the file."))
+        cfg = self.cfg()
+        got = ct.load_agents(cfg)
+        by = {a.handle: a for a in got.agents}
+        self.assertEqual(sorted(by), ["claude", "claude_calls"])
+        self.assertEqual(by["claude"].key, KEY_A)                     # the file's agent wins
+        self.assertFalse(by["claude"].auto)
+        calls = by["claude_calls"]
+        self.assertTrue(calls.auto)
+        self.assertEqual(calls.schedule, ["15:50"])
+        self.assertEqual(calls.strategy, "Buy calls.")
+        self.assertEqual(self.app.minted, ["claude_calls"])
+        keys = self.home / "runner-keys.json"
+        if os.name != "nt":                                             # Windows has no such modes
+            self.assertEqual(keys.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(json.loads(keys.read_text()), {"claude_calls": calls.key})
+        self.assertIn("runner: claude_calls from the app", got.source)
+        for blob in (got.source, " ".join(got.warnings)):
+            self.assertNotIn(self.RUNNER, blob)
+            self.assertNotIn(calls.key, blob)
+        self.assertEqual(ct.check_player(cfg, calls), ("ok", ""))
+
+        ct.RUNNER_CACHE.update(at=0.0)                                  # the next round: the kept key, no new one
+        self.assertEqual({a.handle: a.key for a in ct.load_agents(cfg).agents}["claude_calls"], calls.key)
+        self.assertEqual(self.app.minted, ["claude_calls"])
+
+        ct.forget_runner_key(cfg, "claude_calls")                       # the app refused it: ask again
+        ct.RUNNER_CACHE.update(at=0.0)
+        ct.load_agents(cfg)
+        self.assertEqual(self.app.minted, ["claude_calls", "claude_calls"])
+
+    def test_a_refused_runner_key_warns_and_the_file_still_runs(self):
+        self.write_agents(f'[runner]\nkey = "{self.RUNNER}"\n\n' + agent_toml("claude", KEY_A))
+        got = ct.load_agents(self.cfg())
+        self.assertEqual([a.handle for a in got.agents], ["claude"])
+        self.assertTrue(any("refuses the runner key" in w for w in got.warnings), got.warnings)
+
+    def test_a_file_with_only_a_runner_is_valid_and_a_bad_runner_key_is_not(self):
+        self.app.runner_key = self.RUNNER
+        self.app.runner_bots = [{"handle": "crash_hunter", "strategy": "Buy puts."}]
+        self.write_agents(f'[runner]\nkey = "{self.RUNNER}"\n')
+        self.assertEqual([a.handle for a in ct.load_agents(self.cfg()).agents], ["crash_hunter"])
+        self.write_agents('[runner]\nkey = "nope"\n')
+        with self.assertRaises(ct.ConfigError) as e:
+            ct.load_agents(self.cfg())
+        self.assertIn("[runner]: key must be the runner key", str(e.exception))
+
 
 class BookingTest(Base):
 

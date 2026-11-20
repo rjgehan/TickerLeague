@@ -111,7 +111,7 @@ public class ApiKeyAuthenticationProvider implements AuthenticationProvider {
       return Set.of();
     }
     return Arrays.stream(stored.trim().split("\\s+"))
-        .filter(Scopes.ALL::contains)
+        .filter(s -> Scopes.ALL.contains(s) || Scopes.BOTS_RUN.equals(s))
         .collect(Collectors.toUnmodifiableSet());
   }
 

@@ -15,6 +15,12 @@ public final class Scopes {
   /** All four scopes (the default for admin-issued bot keys, §21.1). */
   public static final Set<String> ALL = Set.of(MARKET_READ, ACCOUNT_READ, TRADE, LEAGUE_READ);
 
+  /**
+   * The claude-trader's runner key: a person's key that only lists the bots they own (those with a strategy saved on
+   * the bot's page) and gets a key for each. Never on a bot's key, never with another scope, never on MCP.
+   */
+  public static final String BOTS_RUN = "bots:run";
+
   /** Read-only scopes (the default for personal keys, §17.2). */
   public static final Set<String> READ_ONLY = Set.of(MARKET_READ, ACCOUNT_READ, LEAGUE_READ);
 
